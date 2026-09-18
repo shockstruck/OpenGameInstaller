@@ -40,6 +40,57 @@ let SteamService: typeof import('../src/electron/handlers/helpers.app/steam.js')
 let SteamServiceLive: typeof import('../src/electron/handlers/helpers.app/steam.js').SteamServiceLive;
 
 beforeAll(async () => {
+  // manager.paths caches __dirname at first import and these modules capture
+  // it as a binding, so a test file that imported them earlier leaves them
+  // rooted at its own OGI_DIRECTORY. Re-root the functions steam.ts uses.
+  const library = await import(
+    '../src/electron/handlers/helpers.app/library.js'
+  );
+  const managerConfig = await import(
+    '../src/electron/manager/manager.config.js'
+  );
+  const steamGridDb = await import('../src/electron/lib/steam-grid-db.js');
+  const libraryPath = (appID: number): string =>
+    path.join(ogiDirectory, `library/${appID}.json`);
+  mock.module('@/electron/handlers/helpers.app/library.js', () => ({
+    ...library,
+    getLibraryPath: libraryPath,
+    loadLibraryInfo: (appID: number): LibraryInfo | null =>
+      fs.existsSync(libraryPath(appID))
+        ? JSON.parse(fs.readFileSync(libraryPath(appID), 'utf-8'))
+        : null,
+    saveLibraryInfo: (appID: number, data: LibraryInfo): void => {
+      fs.mkdirSync(path.dirname(libraryPath(appID)), { recursive: true });
+      fs.writeFileSync(libraryPath(appID), JSON.stringify(data, null, 2));
+    },
+  }));
+  mock.module('@/electron/manager/manager.config.js', () => ({
+    ...managerConfig,
+    getSteamCompatibilityTool: () =>
+      Effect.sync(() => {
+        const configPath = path.join(
+          ogiDirectory,
+          'config/option/general.json'
+        );
+        if (!fs.existsSync(configPath)) return 'proton_experimental';
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as {
+          steamCompatibilityTool?: unknown;
+        };
+        return typeof config.steamCompatibilityTool === 'string'
+          ? config.steamCompatibilityTool.trim()
+          : 'proton_experimental';
+      }),
+  }));
+  mock.module('@/electron/lib/steam-grid-db.js', () => ({
+    ...steamGridDb,
+    downloadSteamGridArtwork: (
+      options: Parameters<typeof steamGridDb.downloadSteamGridArtwork>[0]
+    ) =>
+      steamGridDb.downloadSteamGridArtwork({
+        ...options,
+        baseDirectory: ogiDirectory,
+      }),
+  }));
   ({ SteamService, SteamServiceLive } = await import(
     '../src/electron/handlers/helpers.app/steam.js'
   ));
