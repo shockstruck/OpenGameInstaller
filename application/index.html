@@ -9,6 +9,9 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <script>
       (function () {
+        // Mirrors resolveTheme() in src/frontend/lib/theme.ts; this bootstrap
+        // script runs before any module import is possible, so it can't
+        // import the resolver itself.
         var theme = 'light';
         try {
           if (
@@ -17,6 +20,13 @@
             typeof window.electronAPI.getTheme === 'function'
           ) {
             theme = window.electronAPI.getTheme();
+            if (
+              (theme === 'system' ||
+                (theme !== 'light' && theme !== 'dark' && theme !== 'synthwave')) &&
+              typeof window.electronAPI.getSystemColorScheme === 'function'
+            ) {
+              theme = window.electronAPI.getSystemColorScheme();
+            }
           }
         } catch (e) {}
         document.documentElement.setAttribute('data-theme', theme);

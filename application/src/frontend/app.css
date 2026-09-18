@@ -16,6 +16,7 @@
 
 :root,
 [data-theme="light"] {
+  color-scheme: light;
   --theme-accent: #428a91;
   --theme-accent-dark: #2d626a;
   --theme-accent-light: #b0dfd5;
@@ -47,6 +48,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --theme-accent: #5ee7e0;
   --theme-accent-dark: #4fd2bc;
   --theme-accent-light: #0d9488;
@@ -78,6 +80,7 @@
 }
 
 [data-theme="synthwave"] {
+  color-scheme: dark;
   --theme-accent: #ff7edb;
   --theme-accent-dark: #c026d3;
   --theme-accent-light: #f0abfc;

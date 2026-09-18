@@ -15,6 +15,7 @@ import RangeInput from '@/frontend/components/RangeInput.svelte';
 import ThemePicker from '@/frontend/components/ThemePicker.svelte';
 import { runFrontendEffect } from '@/frontend/lib/core/runtime';
 import { electronRpc } from '@/frontend/lib/electron-rpc';
+import { resolveTheme } from '@/frontend/lib/theme';
 import { createNotification } from '@/frontend/store.svelte';
 
 const logger = createLogger(LOGGER_PREFIXES.frontend);
@@ -70,10 +71,10 @@ let options: OptionsCategory[] = [
     options: {
       theme: {
         displayName: 'Theme',
-        description: 'Appearance theme (Light, Dark, or Synthwave)',
-        defaultValue: 'light',
-        value: 'light',
-        choice: ['light', 'dark', 'synthwave'],
+        description: 'Appearance theme (System, Light, Dark, or Synthwave)',
+        defaultValue: 'system',
+        value: 'system',
+        choice: ['system', 'light', 'dark', 'synthwave'],
         type: 'string',
       },
       fileDownloadLocation: {
@@ -579,7 +580,7 @@ async function saveSteamGridDbKey(): Promise<void> {
   });
 }
 let selectedTorrentClientId: string = $state('webtorrent'); // Track selection reactively
-let selectedTheme: string = $state('light');
+let selectedTheme: string = $state('system');
 let selectedCompatibilityTool: string = $state('auto');
 let compatibilityTools: { id: string; name: string }[] = $state([]);
 
@@ -662,7 +663,10 @@ function handleTorrentClientChange(detail: { selectedId: string }) {
 function handleThemeChange(detail: { selectedId: string }) {
   selectedTheme = detail.selectedId;
   updateConfig();
-  document.documentElement.setAttribute('data-theme', detail.selectedId);
+  document.documentElement.setAttribute(
+    'data-theme',
+    resolveTheme(detail.selectedId, window.electronAPI.getSystemColorScheme())
+  );
 }
 
 function handleCompatibilityToolChange(detail: { selectedId: string }) {

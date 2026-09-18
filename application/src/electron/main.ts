@@ -2,7 +2,14 @@ import { createLogger, LOGGER_PREFIXES } from '@ogi-sdk/logger';
 import '@/electron/lib/source-maps.js';
 import type { ConfigurationFile } from '@ogi-sdk/connect';
 import { Effect } from 'effect';
-import { app, BrowserWindow, globalShortcut, ipcMain, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  nativeTheme,
+  shell,
+} from 'electron';
 import fs, { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { startAddons } from '@/electron/handlers/handler.addon.js';
@@ -167,21 +174,42 @@ logger.sync.info('Running in directory: ' + __dirname);
 // disable hardware acceleration
 app.disableHardwareAcceleration();
 
-/* Sync IPC for initial theme: must be registered before renderer loads to avoid flash */
-ipcMain.on('get-initial-theme', (event) => {
+// Follow the desktop colour scheme unless the user picked an explicit theme.
+nativeTheme.themeSource = 'system';
+
+/** Raw `general.theme` setting from disk, defaulting new/unset installs to 'system'. */
+function readStoredThemeSetting(): string {
   try {
     const configPath = join(__dirname, 'config/option/general.json');
-    if (existsSync(configPath)) {
-      const data = JSON.parse(readFileSync(configPath, 'utf-8')) as {
-        theme?: string;
-      };
-      const t = data.theme;
-      event.returnValue = t === 'dark' || t === 'synthwave' ? t : 'light';
-    } else {
-      event.returnValue = 'light';
-    }
+    if (!existsSync(configPath)) return 'system';
+    const data = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+      theme?: string;
+    };
+    const t = data.theme;
+    return t === 'dark' || t === 'synthwave' || t === 'light' || t === 'system'
+      ? t
+      : 'system';
   } catch {
-    event.returnValue = 'light';
+    return 'system';
+  }
+}
+
+/* Sync IPC for initial theme: must be registered before renderer loads to avoid flash */
+ipcMain.on('get-initial-theme', (event) => {
+  event.returnValue = readStoredThemeSetting();
+});
+
+/* Sync IPC for the desktop colour scheme, used to resolve the 'system' theme setting */
+ipcMain.on('theme:system-scheme', (event) => {
+  event.returnValue = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+});
+
+nativeTheme.on('updated', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(
+      'theme:system-changed',
+      nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+    );
   }
 });
 
@@ -380,6 +408,22 @@ async function onMainAppReady() {
   });
 }
 
+// Mirrors [data-theme="light"]/[data-theme="dark"] --theme-bg-primary in app.css.
+const THEME_BG_PRIMARY_LIGHT = '#f7fffd';
+const THEME_BG_PRIMARY_DARK = '#0f172a';
+
+/** The window background to paint before the renderer loads, so a dark theme never flashes light. */
+function resolveInitialBackgroundColor(): string {
+  const stored = readStoredThemeSetting();
+  const resolved =
+    stored === 'system'
+      ? nativeTheme.shouldUseDarkColors
+        ? 'dark'
+        : 'light'
+      : stored;
+  return resolved === 'light' ? THEME_BG_PRIMARY_LIGHT : THEME_BG_PRIMARY_DARK;
+}
+
 /**
  * Creates the main BrowserWindow, loads splash first, then caller loads the app and registers onMainAppReady.
  * Single-window flow so Steam Deck / Game Mode keeps focus on the same window.
@@ -405,6 +449,7 @@ function createWindow(options: { gameLaunchMode?: boolean } = {}) {
     resizable: true,
     icon: join(app.getAppPath(), 'public/favicon.ico'),
     autoHideMenuBar: true,
+    backgroundColor: resolveInitialBackgroundColor(),
     show: false,
   });
 
