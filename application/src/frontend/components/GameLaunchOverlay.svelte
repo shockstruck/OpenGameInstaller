@@ -39,6 +39,33 @@ let isMounted = false;
 // Prompt state: lets the user launch even when the addon pre-launch step failed
 const addonFailurePrompt = createLaunchPrompt();
 
+/**
+ * Runs pre-launch addon hooks; on failure, asks the user whether to launch
+ * anyway. Shared by the wrapper and direct launch flows, which both need to
+ * run pre-launch hooks before handing off to the game process.
+ */
+async function runPreLaunchHooksOrPrompt(
+  libraryInfo: LibraryInfo
+): Promise<{ proceed: boolean; failureText?: string }> {
+  const preLaunchResult = await runFrontendEffect(
+    runLaunchAppAddons(libraryInfo, 'pre').pipe(Effect.either)
+  );
+  if (preLaunchResult._tag !== 'Left') {
+    return { proceed: true };
+  }
+  const error = preLaunchResult.left;
+  logger.sync.error('[GameLaunchOverlay] Pre-launch hooks failed:', error);
+  const failureText = formatError(error) || 'Pre-launch failed';
+  const proceed = await addonFailurePrompt.request(failureText);
+  if (!proceed) {
+    return { proceed: false, failureText };
+  }
+  logger.sync.warn(
+    '[GameLaunchOverlay] Continuing launch despite pre-launch hook failure'
+  );
+  return { proceed: true };
+}
+
 onMount(async () => {
   isMounted = true;
   // Parse query parameters
@@ -122,31 +149,16 @@ onMount(async () => {
         `[GameLaunchOverlay] Running wrapped launch for ${gameName}: ${wrapperCommand}`
       );
 
-      const preLaunchResult = await runFrontendEffect(
-        runLaunchAppAddons(libraryInfo, 'pre').pipe(Effect.either)
-      );
-      if (preLaunchResult._tag === 'Left') {
-        const error = preLaunchResult.left;
-        logger.sync.error(
-          '[GameLaunchOverlay] Pre-launch hooks failed:',
-          error
-        );
-        const failureText = formatError(error) || 'Pre-launch failed';
-        // Ask the user whether to continue launching despite the addon failure
-        const proceed = await addonFailurePrompt.request(failureText);
-        if (!proceed) {
-          status = 'error';
-          errorMessage = failureText;
-          onError(errorMessage);
-          if (isMounted) runFrontendEffect(electronRpc.app.quit());
-          return;
-        }
-        logger.sync.warn(
-          '[GameLaunchOverlay] Continuing wrapped launch despite pre-launch hook failure'
-        );
-        errorMessage = '';
-        status = 'running';
+      const wrapperPreLaunch = await runPreLaunchHooksOrPrompt(libraryInfo);
+      if (!wrapperPreLaunch.proceed) {
+        status = 'error';
+        errorMessage = wrapperPreLaunch.failureText ?? 'Pre-launch failed';
+        onError(errorMessage);
+        if (isMounted) runFrontendEffect(electronRpc.app.quit());
+        return;
       }
+      errorMessage = '';
+      status = 'running';
 
       let wrapperError: string | null = null;
       await runFrontendEffect(electronRpc.app.hideWindow());
@@ -230,6 +242,17 @@ onMount(async () => {
       // No wrapper command and no UMU library data: fall back to the same
       // direct launchGameFromLibrary() call the warm (in-app) launch path
       // uses, via the app.launchGame RPC, instead of erroring out.
+      const directPreLaunch = await runPreLaunchHooksOrPrompt(libraryInfo);
+      if (!directPreLaunch.proceed) {
+        status = 'error';
+        errorMessage = directPreLaunch.failureText ?? 'Pre-launch failed';
+        onError(errorMessage);
+        if (isMounted) runFrontendEffect(electronRpc.app.quit());
+        return;
+      }
+      errorMessage = '';
+      status = 'running';
+
       logger.sync.info(
         `[GameLaunchOverlay] Launching ${gameName} directly (cold start, no wrapper/UMU)`
       );
@@ -249,14 +272,12 @@ onMount(async () => {
         return;
       }
 
-      status = 'success';
-      const t = setTimeout(() => {
-        if (isMounted) {
-          onComplete();
-          runFrontendEffect(electronRpc.app.quit());
-        }
-      }, 2000);
-      timeouts.push(t);
+      // launchGameFromLibrary() resolves right after spawn(), with the game
+      // still running — keep this overlay mounted for Steam shortcut
+      // launches. The window will be hidden on game:launch and shown again
+      // on game:exit (GameManager owns hide/show, post-launch hooks and
+      // closing the app from there).
+      status = 'running';
     }
   } catch (error) {
     logger.sync.error('[GameLaunchOverlay] Error launching game:', error);
