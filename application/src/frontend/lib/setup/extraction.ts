@@ -15,6 +15,50 @@ const fsEffect = <A>(
     Effect.mapError((cause) => new FileSystemError({ message, path, cause }))
   );
 
+/**
+ * Picks the first volume of a (possibly multi-volume) RAR set from a list of
+ * file names, name-based only — never opens a file to read its header.
+ *
+ * Order of preference:
+ * 1. `.partN.rar` volumes: the lowest N.
+ * 2. Old-style `.rNN` volumes alongside a `.rar`: the `.rar` (the first volume).
+ * 3. A single `.rar` candidate.
+ * 4. Several unrelated `.rar` candidates: the lexicographically first, logged.
+ */
+export function selectRarVolume(names: string[]): string | null {
+  const rarCandidates = names.filter((name) => /\.rar$/i.test(name));
+  if (rarCandidates.length === 0) return null;
+
+  const partVolumes = rarCandidates
+    .map((name) => {
+      const match = name.match(/\.part(\d+)\.rar$/i);
+      return match ? { name, part: Number.parseInt(match[1], 10) } : null;
+    })
+    .filter(
+      (volume): volume is { name: string; part: number } => volume !== null
+    );
+  if (partVolumes.length > 0) {
+    partVolumes.sort((a, b) => a.part - b.part);
+    return partVolumes[0].name;
+  }
+
+  const hasOldStyleVolumes = names.some((name) => /\.r\d{2}$/i.test(name));
+  if (hasOldStyleVolumes) {
+    return rarCandidates[0];
+  }
+
+  if (rarCandidates.length === 1) return rarCandidates[0];
+
+  const chosen = [...rarCandidates].sort()[0];
+  logger.sync.warn(
+    'Multiple .rar files with no volume pattern; picking the lexicographically first:',
+    chosen,
+    'from',
+    rarCandidates
+  );
+  return chosen;
+}
+
 /** Resolves a RAR path from a direct file, downloaded directory, or file metadata. */
 export function resolveRarArchivePath(
   downloadPath: string,
@@ -26,21 +70,21 @@ export function resolveRarArchivePath(
     return Effect.succeed<string | null>(trimmed);
   }
 
+  const fromFilesMeta = (): string | null => {
+    const chosen = selectRarVolume(filesMeta?.map((file) => file.name) ?? []);
+    return chosen ? `${trimmed}/${chosen}` : null;
+  };
+
   return fsEffect(
     electronRpc.fs.getFilesInDir(trimmed),
     'Failed to inspect the downloaded directory.',
     trimmed
   ).pipe(
     Effect.map((files) => {
-      const rar = files.find((file) => /\.rar$/i.test(file));
-      if (rar) return `${trimmed}/${rar}`;
-      const fromMeta = filesMeta?.find((file) => /\.rar$/i.test(file.name));
-      return fromMeta ? `${trimmed}/${fromMeta.name}` : null;
+      const chosen = selectRarVolume(files);
+      return chosen ? `${trimmed}/${chosen}` : fromFilesMeta();
     }),
-    Effect.catchAll(() => {
-      const fromMeta = filesMeta?.find((file) => /\.rar$/i.test(file.name));
-      return Effect.succeed(fromMeta ? `${trimmed}/${fromMeta.name}` : null);
-    })
+    Effect.catchAll(() => Effect.succeed(fromFilesMeta()))
   );
 }
 
