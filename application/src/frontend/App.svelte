@@ -166,10 +166,27 @@ onMount(() => {
   logger.sync.info('client-ready-for-events sent');
 });
 
-// Initialize when DOM is ready
+// Initialize the gamepad poll loop only once a gamepad actually exists —
+// starting it unconditionally means every session pays a 60fps poll and a
+// document-wide MutationObserver even on machines with no gamepad attached.
 document.addEventListener('DOMContentLoaded', () => {
-  window.gamepadNavigator = new GamepadNavigator();
-  window.gamepadNavigator.init();
+  const startGamepadNavigator = () => {
+    if (window.gamepadNavigator) return;
+    window.gamepadNavigator = new GamepadNavigator();
+    window.gamepadNavigator.init();
+  };
+
+  const hasConnectedGamepad = navigator
+    .getGamepads()
+    .some((gamepad) => gamepad !== null);
+  if (hasConnectedGamepad) {
+    startGamepadNavigator();
+    return;
+  }
+
+  window.addEventListener('gamepadconnected', startGamepadNavigator, {
+    once: true,
+  });
 });
 
 async function initializeSearch() {
