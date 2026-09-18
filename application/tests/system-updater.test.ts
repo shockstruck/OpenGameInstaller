@@ -12,6 +12,7 @@ mock.module('@/electron/updater.js', () => ({
 }));
 mock.module('@/electron/startup.js', () => ({
   downloadLatestUmu: async () => ({ success: true, updated: false }),
+  IS_NIXOS: false,
 }));
 
 let SystemUpdateManager: typeof import('../src/electron/system-updater.js').SystemUpdateManager;
