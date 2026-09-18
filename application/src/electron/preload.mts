@@ -70,6 +70,12 @@ const electronApi = {
   },
   getVersion: wrap(() => ipcRenderer.sendSync('get-version')),
   getTheme: wrap(() => ipcRenderer.sendSync('get-initial-theme')),
+  getSystemColorScheme: wrap(() => ipcRenderer.sendSync('theme:system-scheme')),
+  onSystemColorSchemeChange: wrap((cb: (scheme: 'dark' | 'light') => void) => {
+    ipcRenderer.on('theme:system-changed', (_, scheme: 'dark' | 'light') => {
+      cb(scheme);
+    });
+  }),
   isDev: wrap(() => ipcRenderer.sendSync('is-dev')),
 };
 

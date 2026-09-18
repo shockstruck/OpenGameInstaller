@@ -17,6 +17,7 @@ import NotificationSideView from '@/frontend/components/NotificationSideView.sve
 import StorePage from '@/frontend/components/StorePage.svelte';
 import { runDetached, runFrontendEffect } from '@/frontend/lib/core/runtime';
 import { electronRpc } from '@/frontend/lib/electron-rpc';
+import { resolveTheme } from '@/frontend/lib/theme';
 import AppUpdateManager from '@/frontend/managers/AppUpdateManager.svelte';
 import ChangelogManager from '@/frontend/managers/ChangelogManager.svelte';
 import Debug from '@/frontend/managers/Debug.svelte';
@@ -164,6 +165,19 @@ onMount(() => {
   // send client-ready-for-events
   window.electronAPI.app.clientReadyForEvents();
   logger.sync.info('client-ready-for-events sent');
+
+  // Re-apply the theme when the desktop colour scheme changes, but only
+  // while the user hasn't picked an explicit theme (setting === 'system').
+  window.electronAPI.onSystemColorSchemeChange((scheme: 'dark' | 'light') => {
+    const storedTheme =
+      getConfigClientOption<{ theme?: string }>('general')?.theme ?? 'system';
+    if (storedTheme === 'system') {
+      document.documentElement.setAttribute(
+        'data-theme',
+        resolveTheme(storedTheme, scheme)
+      );
+    }
+  });
 });
 
 // Initialize the gamepad poll loop only once a gamepad actually exists —
