@@ -1,7 +1,7 @@
 This is ShockStruck's maintained fork of [Nat3z/OpenGameInstaller](https://github.com/Nat3z/OpenGameInstaller); upstream's README follows. Licence AGPL-3.0-only, unchanged.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/f1725eb8-930b-4fca-a2dd-3fdef22dbef1" alt="ogi logo (courtesy of hoyoverse)" />
+  <img src="application/public/favicon-512x512.png" alt="OpenGameInstaller logo" />
 </p>
 
 <p align="center">
