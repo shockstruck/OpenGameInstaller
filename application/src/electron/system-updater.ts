@@ -2,7 +2,7 @@ import { formatError, UpdateError } from '@ogi-sdk/errors';
 import { createLogger, LOGGER_PREFIXES } from '@ogi-sdk/logger';
 import { Effect } from 'effect';
 import { getEffectiveOnlineState } from '@/electron/lib/online.js';
-import { downloadLatestUmu } from '@/electron/startup.js';
+import { downloadLatestUmu, IS_NIXOS } from '@/electron/startup.js';
 import {
   checkIfInstallerUpdateAvailable,
   type UpdaterCallbacks,
@@ -100,12 +100,35 @@ export class SystemUpdateManager {
   }
 }
 
+const NIX_STORE_PREFIX = '/nix/store/';
+
+/**
+ * The installer updater replaces the running Setup AppImage in place, which
+ * has no meaning on an immutable NixOS install (there is no AppImage next to
+ * a `/nix/store` binary to replace). Gate on both the detected OS and the
+ * running binary's path so a NixOS-built package is caught even before
+ * `IS_NIXOS` detection has run.
+ */
+export function shouldRunInstallerUpdater(
+  params: { isNixos?: boolean; execPath?: string } = {}
+): boolean {
+  const { isNixos = false, execPath = process.execPath } = params;
+  return !isNixos && !execPath.startsWith(NIX_STORE_PREFIX);
+}
+
 export class SetupAppImageUpdater implements SystemUpdater {
   id = 'setup-appimage';
   label = 'installer';
 
   shouldRun(): Effect.Effect<boolean> {
-    return Effect.succeed(true);
+    const allowed = shouldRunInstallerUpdater({
+      isNixos: IS_NIXOS,
+      execPath: process.execPath,
+    });
+    if (!allowed) {
+      logger.sync.info('installer updater disabled: immutable install');
+    }
+    return Effect.succeed(allowed);
   }
 
   update(
