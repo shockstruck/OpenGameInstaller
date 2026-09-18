@@ -280,7 +280,7 @@ function registerLogContainer(element: HTMLDivElement, taskId: string) {
   <!-- Side Panel -->
   <div
     bind:this={sideViewElement}
-    class="fixed right-0 top-0 h-full w-96 bg-background-color shadow-2xl z-101 flex flex-col"
+    class="fixed right-0 top-0 h-full w-full max-w-96 bg-background-color shadow-2xl z-101 flex flex-col"
     in:fly={{ x: 384, duration: 300, easing: quintOut }}
     out:fly={{ x: 384, duration: 200 }}
   >

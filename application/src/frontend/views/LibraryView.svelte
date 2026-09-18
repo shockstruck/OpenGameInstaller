@@ -193,10 +193,10 @@ onDestroy(() => {
               </h2>
             </div>
             <div
-              class="flex gap-4 flex-row flex-nowrap overflow-x-hidden pt-8 -mt-8 pb-6 -mb-6 overflow-y-hidden px-4"
+              class="library-grid library-grid-recent pt-8 -mt-8 pb-6 -mb-6 px-4"
             >
               {#each recentlyPlayed as app, index (app.appID)}
-                <div class="library-entry-shell w-3/12 shrink-0">
+                <div class="library-entry-shell">
                   <button
                     data-library-item
                     class="library-entry w-full border-none relative transition-all shadow-lg hover:shadow-xl rounded-lg overflow-hidden bg-surface"
@@ -261,10 +261,10 @@ onDestroy(() => {
         <!-- All Games Section -->
         <div class="space-y-6">
           <div
-            class="bg-accent-lighter px-4 py-2 rounded-lg flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            class="bg-accent-lighter px-4 py-2 rounded-lg flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between"
           >
             <h2 class="text-xl font-semibold text-accent-dark">All Games</h2>
-            <div class="relative w-full sm:w-auto">
+            <div class="relative w-full @lg:w-auto">
               <div
                 class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
               >
@@ -286,7 +286,7 @@ onDestroy(() => {
                 type="text"
                 bind:value={searchQuery}
                 placeholder="Search games..."
-                class="block w-full sm:w-64 pl-9 pr-3 py-2 border border-accent rounded-md text-sm bg-surface text-text-primary placeholder-accent caret-accent-dark focus:outline-none focus:ring-1 focus:ring-accent-dark focus:border-accent-dark transition-colors"
+                class="block w-full @lg:w-64 pl-9 pr-3 py-2 border border-accent rounded-md text-sm bg-surface text-text-primary placeholder-accent caret-accent-dark focus:outline-none focus:ring-1 focus:ring-accent-dark focus:border-accent-dark transition-colors"
               />
             </div>
           </div>
@@ -310,7 +310,7 @@ onDestroy(() => {
               </div>
             </div>
           {:else}
-            <div class="grid grid-cols-5 gap-4 overflow-hidden w-full">
+            <div class="library-grid w-full">
               {#each filteredGames as app, appIndex (app.appID)}
                 <div class="library-entry-shell">
                   <button
@@ -394,6 +394,22 @@ onDestroy(() => {
 {/key}
 
 <style>
+  /* Column count follows the available width; card width stays close to the
+     five-column layout of the original 1000x700 window (~150px). Once the
+     content area is wide enough (the default window and up) the
+     recently-played row keeps its original four ~190px cards. */
+  .library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    gap: 1rem;
+  }
+
+  @container (width >= 51rem) {
+    .library-grid.library-grid-recent {
+      grid-template-columns: repeat(4, minmax(0, 12rem));
+    }
+  }
+
   .library-entry-shell {
     position: relative;
     padding: 20px 10px 18px;

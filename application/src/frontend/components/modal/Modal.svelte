@@ -123,7 +123,7 @@ onDestroy(() => {
 {#if open && modalShouldOpenQueued}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="w-full h-full fixed bg-slate-900/40 backdrop-blur-sm flex top-0 left-0 justify-center items-center z-40 transition-all duration-200"
+    class="w-full h-full fixed bg-slate-900/40 backdrop-blur-sm flex top-0 left-0 justify-center items-center p-4 z-40 transition-all duration-200"
     onclick={handleOverlayClick}
     onkeydown={handleKeydown}
     tabindex="-1"
@@ -143,11 +143,13 @@ onDestroy(() => {
 <style global>
   @reference "../../app.css";
 
+  /* Heights are capped by the window so a modal scrolls inside a short tile
+     instead of extending past its edges. */
   .modal-small {
-    @apply max-w-xs w-full max-h-80;
+    @apply max-w-xs w-full max-h-[min(20rem,90vh)];
   }
   .modal-medium {
-    @apply max-w-lg w-full max-h-[32rem];
+    @apply max-w-lg w-full max-h-[min(32rem,90vh)];
   }
   .modal-large {
     @apply max-w-2xl w-full max-h-[90vh];

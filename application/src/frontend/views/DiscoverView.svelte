@@ -56,7 +56,24 @@ let allSections = $state<AllSections[]>([]);
 let featuredCarouselItems = $state<DiscoverCarouselItem[]>([]);
 let featuredCarouselIndex = $state(0);
 let carouselIndices = $state<Record<string, number>>({});
-const CAROUSEL_PAGE_SIZE = 5;
+// Card footprint in px: w-32 plus the 0.75rem gap. Cards keep their size and
+// the page holds as many as the carousel window is wide, minimum one.
+const CAROUSEL_CARD_WIDTH = 128;
+const CAROUSEL_CARD_GAP = 12;
+const CAROUSEL_DEFAULT_PAGE_SIZE = 5;
+let carouselWindowRect = $state<DOMRectReadOnly | undefined>(undefined);
+let carouselWindowWidth = $derived(carouselWindowRect?.width ?? 0);
+let carouselPageSize = $derived(
+  carouselWindowWidth > 0
+    ? Math.max(
+        1,
+        Math.floor(
+          (carouselWindowWidth + CAROUSEL_CARD_GAP) /
+            (CAROUSEL_CARD_WIDTH + CAROUSEL_CARD_GAP)
+        )
+      )
+    : CAROUSEL_DEFAULT_PAGE_SIZE
+);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -155,15 +172,33 @@ function handleCarouselNav(
 
 function getCarouselPages(listings: BasicLibraryInfo[]): BasicLibraryInfo[][] {
   const pages: BasicLibraryInfo[][] = [];
-  for (let start = 0; start < listings.length; start += CAROUSEL_PAGE_SIZE) {
-    pages.push(listings.slice(start, start + CAROUSEL_PAGE_SIZE));
+  for (let start = 0; start < listings.length; start += carouselPageSize) {
+    pages.push(listings.slice(start, start + carouselPageSize));
   }
   return pages;
 }
 
 function getCarouselMaxPage(totalItems: number) {
-  return Math.max(0, Math.ceil(totalItems / CAROUSEL_PAGE_SIZE) - 1);
+  return Math.max(0, Math.ceil(totalItems / carouselPageSize) - 1);
 }
+
+// A resize that shrinks the page count must not leave a section on a page
+// that no longer exists.
+$effect(() => {
+  const pageSize = carouselPageSize;
+  const clamped: Record<string, number> = {};
+  let changed = false;
+  for (const section of allSections) {
+    const maxPage = Math.max(
+      0,
+      Math.ceil(section.section.listings.length / pageSize) - 1
+    );
+    const current = carouselIndices[section.sectionKey] || 0;
+    clamped[section.sectionKey] = Math.min(current, maxPage);
+    if (clamped[section.sectionKey] !== current) changed = true;
+  }
+  if (changed) carouselIndices = { ...carouselIndices, ...clamped };
+});
 
 function setFeaturedCarouselIndex(index: number) {
   const count = featuredCarouselItems.length;
@@ -336,11 +371,11 @@ onMount(() => {
       <!-- Skeleton Featured Carousel -->
       <div class="px-4">
         <div
-          class="relative overflow-hidden rounded-xl bg-accent-lighter h-52 sm:h-60 md:h-72"
+          class="relative overflow-hidden rounded-xl bg-accent-lighter h-[clamp(9rem,41vh,18rem)]"
         >
           <div class="absolute inset-0 skeleton"></div>
           <div
-            class="absolute inset-0 py-8 px-16 flex flex-col justify-end pointer-events-none"
+            class="absolute inset-0 py-[clamp(1rem,4vh,2rem)] px-[clamp(3rem,7%,4rem)] flex flex-col justify-end pointer-events-none"
             style="background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.12));"
           >
             <div class="flex items-center gap-2 mb-3">
@@ -388,7 +423,7 @@ onMount(() => {
           <!-- Skeleton Games Carousel -->
           <div class="relative flex items-center w-full">
             <div
-              class="flex flex-row gap-3 w-full justify-center overflow-hidden px-7"
+              class="flex flex-row flex-wrap gap-3 w-full justify-center overflow-hidden px-7"
               style="min-height: 200px;"
             >
               {#each [1, 2, 3, 4, 5] as gameIndex}
@@ -418,7 +453,7 @@ onMount(() => {
     <div class="space-y-6">
       {#if featuredCarouselItems.length > 0}
         <div
-          class="discover-load-in relative overflow-hidden rounded-xl bg-accent-lighter h-52 sm:h-60 md:h-72"
+          class="discover-load-in relative overflow-hidden rounded-xl bg-accent-lighter h-[clamp(9rem,41vh,18rem)]"
           style="--load-delay: 80ms;"
         >
           <div
@@ -444,7 +479,7 @@ onMount(() => {
                 />
 
                 <div
-                  class="featured-carousel-overlay absolute inset-0 py-8 px-16 flex flex-col justify-end"
+                  class="featured-carousel-overlay absolute inset-0 py-[clamp(1rem,4vh,2rem)] px-[clamp(3rem,7%,4rem)] flex flex-col justify-end"
                   style="background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.15));"
                 >
                   <div class="flex items-center gap-2 mb-2">
@@ -599,7 +634,10 @@ onMount(() => {
               </button>
 
               <!-- Carousel Items -->
-              <div class="discover-games-carousel-window">
+              <div
+                class="discover-games-carousel-window"
+                bind:contentRect={carouselWindowRect}
+              >
                 <div
                   class="discover-games-carousel-track"
                   style={`--carousel-index: ${currentPage};`}
@@ -730,7 +768,10 @@ onMount(() => {
 
   .discover-games-carousel-window {
     min-height: 200px;
-    overflow: hidden;
+    /* Clip at the content box so the next page never peeks through the
+       padding reserved for the arrows. */
+    overflow: clip;
+    overflow-clip-margin: content-box;
     width: 100%;
     padding: 0 clamp(1.75rem, 4vw, 3rem);
   }

@@ -532,7 +532,9 @@ function handleRunTask(task: SearchResult, addonID: string) {
 >
   <div class="min-h-0 flex-1 overflow-y-auto">
     <!-- Hero Banner Section -->
-    <div class="relative h-64 w-full shrink-0 overflow-hidden">
+    <div
+      class="relative h-[clamp(9rem,37vh,16rem)] w-full shrink-0 overflow-hidden"
+    >
       <Image
         classifier={libraryInfo.appID.toString() + '-cover'}
         src={libraryInfo.coverImage}
@@ -544,7 +546,9 @@ function handleRunTask(task: SearchResult, addonID: string) {
         class="absolute bottom-0 left-0 right-0 p-6"
         style="background: linear-gradient(to top, var(--color-overlay-bg), transparent);"
       >
-        <h1 class="mb-2 text-4xl font-archivo font-bold text-overlay-text">
+        <h1
+          class="mb-2 text-4xl @max-lg:text-3xl font-archivo font-bold text-overlay-text break-words"
+        >
           {libraryInfo.name}
         </h1>
       </div>
@@ -623,7 +627,7 @@ function handleRunTask(task: SearchResult, addonID: string) {
               <p class="font-archivo font-semibold text-white">Play</p>
             </button>
             <div
-              class="pointer-events-none absolute top-full left-0 z-10 mt-2 flex flex-row items-center gap-2 whitespace-nowrap rounded-lg border border-accent-dark bg-accent-lighter px-3 py-2 text-sm text-accent-dark opacity-0 drop-shadow-md transition-opacity duration-200 group-hover:opacity-100"
+              class="pointer-events-none absolute top-full left-0 z-10 mt-2 flex w-max max-w-[min(28rem,80cqw)] flex-row items-center gap-2 rounded-lg border border-accent-dark bg-accent-lighter px-3 py-2 text-sm text-accent-dark opacity-0 drop-shadow-md transition-opacity duration-200 group-hover:opacity-100"
             >
               <img src="./error.svg" alt="error" class="h-4 w-4" />
               <p class="pr-4 font-archivo font-semibold text-accent-dark">

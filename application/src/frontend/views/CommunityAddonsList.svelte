@@ -257,7 +257,7 @@ async function proceedWithInstall(url: string, addon: CommunityAddon) {
   }
 
   .addon-card {
-    @apply bg-accent-lighter rounded-lg h-28 flex items-center justify-between;
+    @apply bg-accent-lighter rounded-lg min-h-28 flex items-center justify-between;
     width: 100%;
   }
 
@@ -276,7 +276,7 @@ async function proceedWithInstall(url: string, addon: CommunityAddon) {
   }
 
   .addon-info {
-    @apply flex flex-col justify-center flex-1 ml-6;
+    @apply flex flex-col justify-center flex-1 min-w-0 ml-6;
   }
 
   .addon-title {

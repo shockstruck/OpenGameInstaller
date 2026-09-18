@@ -389,8 +389,8 @@ onDestroy(() => {
 <!-- Speed Chart Section -->
 {#if sortedDownloads.length > 0}
   {#if targetDownload}
-    <div class="w-full flex flex-row gap-4 pl-1 mb-8">
-      <div class="h-auto w-5/12 relative">
+    <div class="w-full flex flex-col @2xl:flex-row gap-4 pl-1 mb-8">
+      <div class="h-40 @2xl:h-auto w-full @2xl:w-5/12 relative">
         <GameImage
           src={targetDownload.coverImage}
           alt={targetDownload.name}
@@ -405,7 +405,7 @@ onDestroy(() => {
         {/if}
       </div>
 
-      <div class="w-7/12 h-full flex flex-col">
+      <div class="w-full @2xl:w-7/12 min-w-0 h-full flex flex-col">
         <div class="chart-container" bind:this={chartContainer}></div>
 
         {#if getDownloadStatistics()}
@@ -414,7 +414,7 @@ onDestroy(() => {
             <div
               class="mt-4 p-4 bg-accent-lighter rounded-lg border border-border"
             >
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4">
                 <div
                   class="flex items-center gap-3 p-3 bg-surface rounded-lg border border-border shadow-sm hover:shadow-md transition-all duration-200"
                 >
@@ -1143,11 +1143,11 @@ onDestroy(() => {
   }
 
   .download-content {
-    @apply flex-1 flex items-center justify-between gap-4;
+    @apply flex-1 min-w-0 flex flex-wrap items-center justify-between gap-4;
   }
 
   .download-info {
-    @apply flex-1 flex flex-col gap-2;
+    @apply flex-1 min-w-0 flex flex-col gap-2;
   }
 
   .download-title {
@@ -1179,7 +1179,7 @@ onDestroy(() => {
   }
 
   .download-actions {
-    @apply flex-shrink-0;
+    @apply flex-shrink-0 flex flex-wrap items-center ml-auto;
   }
 
   /* Status Badges */
