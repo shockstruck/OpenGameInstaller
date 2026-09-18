@@ -140,7 +140,12 @@ const PRESERVED_UPDATE_ENTRIES = new Set([
   'logs',
   'favicon.png',
 ]);
-const OGI_REPO_URL = 'https://github.com/Nat3z/OpenGameInstaller';
+const OGI_REPO_URL = 'https://github.com/shockstruck/OpenGameInstaller';
+const OGI_REPO_SLUG = 'shockstruck/OpenGameInstaller';
+
+export function buildReleaseListUrl(repoSlug: string): string {
+  return `https://api.github.com/repos/${repoSlug}/releases`;
+}
 const HTTP_RANGE_AGENTS = {
   http: new http.Agent({
     keepAlive: true,
@@ -760,10 +765,35 @@ function comparePrereleaseIdentifier(a, b) {
   return 0;
 }
 
+// Fork releases are tagged `v<upstream>-ss.<n>`, e.g. `4.3.1-ss.1`. Unlike a
+// standard semver prerelease, `-ss.<n>` marks a ShockStruck build published
+// *after* `<upstream>`, so it must outrank the bare `<upstream>` tag instead
+// of being treated as a pre-release candidate for it.
+function getForkBuildNumber(prerelease: string[]): number | null {
+  if (
+    prerelease.length === 2 &&
+    prerelease[0] === 'ss' &&
+    /^\d+$/.test(prerelease[1])
+  ) {
+    return Number.parseInt(prerelease[1], 10);
+  }
+  return null;
+}
+
 function compareParsedReleaseVersion(a, b) {
   if (a.major !== b.major) return a.major > b.major ? 1 : -1;
   if (a.minor !== b.minor) return a.minor > b.minor ? 1 : -1;
   if (a.patch !== b.patch) return a.patch > b.patch ? 1 : -1;
+
+  const aForkBuild = getForkBuildNumber(a.prerelease);
+  const bForkBuild = getForkBuildNumber(b.prerelease);
+  if (aForkBuild !== null && bForkBuild !== null) {
+    if (aForkBuild > bForkBuild) return 1;
+    if (aForkBuild < bForkBuild) return -1;
+    return 0;
+  }
+  if (aForkBuild !== null && b.prerelease.length === 0) return 1;
+  if (bForkBuild !== null && a.prerelease.length === 0) return -1;
 
   const aHasPrerelease = a.prerelease.length > 0;
   const bHasPrerelease = b.prerelease.length > 0;
@@ -790,7 +820,7 @@ function compareParsedReleaseVersion(a, b) {
   return 0;
 }
 
-function compareReleaseOrder(a: any, b: any) {
+export function compareReleaseOrder(a: any, b: any) {
   const parsedA = parseReleaseVersion(a?.tag_name);
   const parsedB = parseReleaseVersion(b?.tag_name);
 
@@ -1068,10 +1098,9 @@ function createWindow(): Effect.Effect<void, UpdaterError> {
       return;
     }
 
-    const gitRepo = 'Nat3z/OpenGameInstaller';
     const releaseResult = yield* Effect.either(
       tryUpdatePromise('check-for-updates', (signal) =>
-        axios.get(`https://api.github.com/repos/${gitRepo}/releases`, {
+        axios.get(buildReleaseListUrl(OGI_REPO_SLUG), {
           signal,
           timeout: 10000,
         })
