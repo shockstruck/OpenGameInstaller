@@ -1261,16 +1261,43 @@ onMount(() => {
 <style>
   @reference "../app.css";
   .config-container {
-    @apply flex h-full w-full;
+    @apply flex h-full w-full min-h-0;
   }
 
-  /* Sidebar Styles */
+  /* Sidebar Styles: a fixed 20rem column at the default window, a narrower
+     column in medium tiles, and a wrapping tab row when the content area is
+     too narrow for two columns. */
   .sidebar {
-    @apply w-80 flex flex-col;
+    @apply flex flex-col shrink-0 min-h-0 overflow-y-auto;
+    width: clamp(13rem, 36%, 20rem);
   }
 
   .sidebar-nav {
     @apply flex-1 space-y-2;
+  }
+
+  /* Selectors are qualified with .config-container so they outrank the base
+     rules regardless of where the compiler places the query block. */
+  @container (width < 36rem) {
+    .config-container {
+      @apply flex-col;
+    }
+
+    .config-container .sidebar {
+      @apply w-full overflow-visible pb-2 mb-2;
+    }
+
+    .config-container .sidebar-nav {
+      @apply flex flex-row flex-wrap gap-2 space-y-0;
+    }
+
+    .config-container .sidebar-item {
+      @apply w-auto whitespace-nowrap px-4 py-3;
+    }
+
+    .config-container .sidebar-item-description {
+      @apply hidden;
+    }
   }
 
   .sidebar-item {
@@ -1304,6 +1331,12 @@ onMount(() => {
 
   .content-body.about-content {
     @apply flex items-center justify-center;
+  }
+
+  /* Safe centering: a short window scrolls the about block instead of
+     clipping its top edge. */
+  .content-body.about-content .about-section {
+    @apply m-auto;
   }
 
   /* About Section Styles */

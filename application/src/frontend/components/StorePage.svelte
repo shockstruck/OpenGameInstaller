@@ -429,21 +429,23 @@ $effect(() => {
       <!-- Skeleton Loading State -->
       <div class="">
         <!-- Hero Banner Skeleton -->
-        <div class="relative w-full h-64 overflow-hidden rounded-lg">
+        <div
+          class="relative w-full h-[clamp(9rem,37vh,16rem)] overflow-hidden rounded-lg"
+        >
           <div class="skeleton w-full h-full"></div>
           <div
             class="absolute bottom-0 left-0 right-0 p-6 rounded-b-lg bg-linear-to-t from-overlay-bg to-transparent"
           >
-            <div class="skeleton h-10 w-64 mb-2"></div>
-            <div class="skeleton h-4 w-96"></div>
+            <div class="skeleton h-10 w-64 max-w-full mb-2"></div>
+            <div class="skeleton h-4 w-96 max-w-full"></div>
           </div>
         </div>
       </div>
 
       <!-- Main Content Skeleton -->
-      <div class="flex flex-1 overflow-hidden gap-4">
+      <div class="store-body flex flex-1 overflow-hidden gap-4">
         <!-- Left side - Description Skeleton -->
-        <div class="mt-4 flex-1 overflow-y-auto">
+        <div class="store-description mt-4 flex-1 overflow-y-auto">
           <div class="pb-10 pt-4 space-y-4">
             <div class="skeleton h-4 w-full"></div>
             <div class="skeleton h-4 w-5/6"></div>
@@ -455,7 +457,7 @@ $effect(() => {
         </div>
 
         <!-- Right sidebar Skeleton -->
-        <div class="w-80 flex flex-col pt-4">
+        <div class="store-sidebar w-80 flex flex-col pt-4">
           <div class="p-6 bg-accent-lighter rounded-lg mb-4">
             <div class="skeleton h-12 w-full rounded-lg"></div>
           </div>
@@ -483,7 +485,9 @@ $effect(() => {
       <!-- Unified Store Layout -->
       <!-- Hero Banner Section -->
       <div class="">
-        <div class="relative w-full h-64 overflow-hidden rounded-lg">
+        <div
+          class="relative w-full h-[clamp(9rem,37vh,16rem)] overflow-hidden rounded-lg"
+        >
           <GameImage
             src={gameData.headerImage}
             alt={gameData.name}
@@ -518,9 +522,9 @@ $effect(() => {
       </div>
 
       <!-- Main Content Area -->
-      <div class="flex flex-1 overflow-hidden gap-4">
+      <div class="store-body flex flex-1 overflow-hidden gap-4">
         <!-- Left side - Description -->
-        <div class="mt-4 flex-1 overflow-y-auto relative">
+        <div class="store-description mt-4 flex-1 overflow-y-auto relative">
           <!-- Fade gradient overlay at top (opaque at top edge, fading down) -->
           <div
             class="sticky top-0 h-3 bg-linear-to-t from-transparent to-bg-primary/40 z-10 pointer-events-none"
@@ -542,7 +546,7 @@ $effect(() => {
         </div>
 
         <!-- Right sidebar -->
-        <div class="w-80 flex flex-col pt-4">
+        <div class="store-sidebar w-80 flex flex-col pt-4">
           <!-- Active Download Progress -->
           {#if activeDownload && !alreadyOwns}
             <div class="p-6 bg-accent-lighter rounded-lg mb-4">
@@ -1069,6 +1073,23 @@ $effect(() => {
 
 <style global>
   @reference "../app.css";
+
+  /* Below ~46rem of content width the description and the download sidebar
+     stack; the page then scrolls as one column instead of two panes. */
+  @container (width < 46rem) {
+    .store-body {
+      @apply flex-col overflow-y-auto;
+    }
+
+    .store-description {
+      @apply flex-none overflow-visible;
+    }
+
+    .store-sidebar {
+      @apply w-full;
+    }
+  }
+
   #g-descript-custom {
     @apply text-text-primary bg-transparent;
   }

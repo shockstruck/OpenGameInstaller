@@ -168,7 +168,7 @@ onMount(() => {
   {#each $notifications as notification (notification.id)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="notification-card flex flex-col rounded-xl p-4 w-7/12 relative items-stretch h-fit fly-in-accent pointer-events-auto overflow-hidden cursor-pointer"
+      class="notification-card flex flex-col rounded-xl p-4 w-full max-w-[30rem] relative items-stretch h-fit fly-in-accent pointer-events-auto overflow-hidden cursor-pointer"
       id={'notification-' + notification.id}
       on:mouseenter={() => pauseNotificationTimer(notification.id)}
       on:mouseleave={() => resumeNotificationTimer(notification.id)}

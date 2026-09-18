@@ -217,13 +217,13 @@ async function resetMarketplaceSources() {
         <button
           data-selected={$view === 'my-addons'}
           onclick={() => view.set('my-addons')}
-          class="h-full flex-1 border-none text-accent-dark font-archivo rounded-lg bg-accent-lighter data-[selected=true]:bg-accent-light shadow-md text-lg hover:bg-accent-light transition-colors"
+          class="h-full flex-1 min-w-0 px-2 truncate border-none text-accent-dark font-archivo rounded-lg bg-accent-lighter data-[selected=true]:bg-accent-light shadow-md text-lg hover:bg-accent-light transition-colors"
           >My Addons</button
         >
         <button
           data-selected={$view === 'community-addons'}
           onclick={() => view.set('community-addons')}
-          class="h-full flex-1 border-none text-accent-dark rounded-lg bg-accent-lighter shadow-md data-[selected=true]:bg-accent-light font-archivo text-lg hover:bg-accent-light transition-colors"
+          class="h-full flex-1 min-w-0 px-2 truncate border-none text-accent-dark rounded-lg bg-accent-lighter shadow-md data-[selected=true]:bg-accent-light font-archivo text-lg hover:bg-accent-light transition-colors"
           >Community Addons</button
         >
         {#if $view === 'community-addons'}
@@ -268,7 +268,7 @@ async function resetMarketplaceSources() {
           </div>
         {:else if $view === 'my-addons'}
           <button
-            class="bg-accent-lighter z-10 text-accent-dark h-full px-6 relative py-3 rounded-lg font-archivo font-semibold hover:bg-accent-light transition-colors border-none shadow-md flex items-center gap-2"
+            class="bg-accent-lighter z-10 text-accent-dark h-full px-6 relative py-3 rounded-lg font-archivo font-semibold hover:bg-accent-light transition-colors border-none shadow-md flex items-center gap-2 shrink-0"
             onclick={() => updateAddons()}
             data-disable
             aria-label="Update all addons"
@@ -297,7 +297,7 @@ async function resetMarketplaceSources() {
             {/if}
           </button>
           <button
-            class="bg-accent-lighter z-10 text-accent-dark h-full px-6 relative py-3 rounded-lg font-archivo font-semibold hover:bg-accent-light transition-colors border-none shadow-md flex items-center gap-2"
+            class="bg-accent-lighter z-10 text-accent-dark h-full px-6 relative py-3 rounded-lg font-archivo font-semibold hover:bg-accent-light transition-colors border-none shadow-md flex items-center gap-2 shrink-0"
             in:fly={{ y: -100, duration: 400, easing: quintOut }}
             aria-label="Add Addon"
             onclick={() => (showAddonAddModal = true)}
@@ -576,7 +576,7 @@ async function resetMarketplaceSources() {
   }
 
   .addon-card-large {
-    @apply rounded-lg h-28 duration-200 flex flex-row items-center relative;
+    @apply rounded-lg min-h-28 duration-200 flex flex-row items-center relative;
     width: 100%;
   }
 
@@ -590,7 +590,7 @@ async function resetMarketplaceSources() {
   }
 
   .addon-info {
-    @apply flex flex-col justify-center flex-1 ml-6 relative z-10;
+    @apply flex flex-col justify-center flex-1 min-w-0 ml-6 relative z-10;
   }
 
   .addon-title {

@@ -557,7 +557,7 @@ onDestroy(() => {
 </script>
 
 <main
-  class="flex items-center flex-col justify-center w-full h-full p-8 bg-background-color fixed top-0 left-0 z-5 overflow-y-auto overflow-x-visible"
+  class="flex items-center flex-col justify-center-safe w-full h-full p-[clamp(1rem,4vw,2rem)] bg-background-color fixed top-0 left-0 z-5 overflow-y-auto overflow-x-hidden"
   id="oobe"
 >
   {#if stage >= 1}
@@ -589,7 +589,7 @@ onDestroy(() => {
     </div>
   {:else if stage === 0.5}
     <div
-      class="animate-fade-in-pop flex justify-center items-center h-full flex-col gap-6 p-10 w-full max-w-xl"
+      class="animate-fade-in-pop flex justify-center items-center flex-col gap-6 p-[clamp(1rem,4vw,2.5rem)] w-full max-w-xl"
     >
       <h1 class="text-3xl font-archivo font-semibold text-text-primary mt-2">
         Choose Your Theme
@@ -727,7 +727,7 @@ onDestroy(() => {
     </div>
   {:else if stage === 1.5}
     <div
-      class="animate-fade-in-pop flex justify-center items-center h-full flex-col gap-6 p-10 w-full"
+      class="animate-fade-in-pop flex justify-center items-center flex-col gap-6 p-[clamp(1rem,4vw,2.5rem)] w-full"
     >
       <h1 class="text-3xl font-archivo font-semibold text-text-primary mt-2">
         Restart Required
@@ -744,7 +744,7 @@ onDestroy(() => {
     </div>
   {:else if stage === 2}
     <div
-      class="animate-fade-in-pop flex justify-start items-center h-full flex-col gap-6 p-10 w-full max-w-4xl"
+      class="animate-fade-in-pop flex justify-start items-center flex-col gap-6 p-[clamp(1rem,4vw,2.5rem)] w-full max-w-4xl"
     >
       <h1 class="text-3xl font-archivo font-semibold text-text-primary mt-2">
         Torrenting
@@ -753,7 +753,7 @@ onDestroy(() => {
         How would you like to torrent your files?
       </h2>
       <!-- svelte-ignore a11y_consider_explicit_label -->
-      <div class="flex-row flex gap-6 justify-center items-center">
+      <div class="flex-row flex flex-wrap gap-6 justify-center items-center">
         <button
           onclick={() => (selectedTorrenter = 'webtorrent')}
           class="flex justify-center p-4 items-center w-24 h-24 bg-accent-lighter hover:bg-accent-light rounded-lg border-2 transition-colors duration-200 {selectedTorrenter ===
@@ -981,7 +981,7 @@ onDestroy(() => {
     </div>
   {:else if stage === 3}
     <div
-      class="animate-fade-in-pop flex justify-center items-center h-full flex-col gap-6 p-10 w-full max-w-2xl"
+      class="animate-fade-in-pop flex justify-center items-center flex-col gap-6 p-[clamp(1rem,4vw,2.5rem)] w-full max-w-2xl"
     >
       <h1 class="text-3xl font-archivo font-semibold text-text-primary mt-2">
         Download Location
@@ -1191,7 +1191,7 @@ onDestroy(() => {
     </div>
   {:else if stage === 5}
     <div
-      class="animate-fade-in-pop flex justify-center items-center h-full flex-col gap-6 p-10 w-full max-w-2xl"
+      class="animate-fade-in-pop flex justify-center items-center flex-col gap-6 p-[clamp(1rem,4vw,2.5rem)] w-full max-w-2xl"
     >
       <h1 class="text-3xl font-archivo font-semibold text-text-primary mt-2">
         SteamGridDB
@@ -1269,7 +1269,7 @@ onDestroy(() => {
     </div>
   {:else if stage === 6}
     <div
-      class="animate-fade-in-pop flex justify-center items-center h-full flex-col gap-6 p-10 w-full"
+      class="animate-fade-in-pop flex justify-center items-center flex-col gap-6 p-[clamp(1rem,4vw,2.5rem)] w-full"
     >
       <img src="./favicon.png" alt="OpenGameInstaller Logo" class="w-32 h-32" />
       <h1 class="text-3xl font-archivo font-semibold text-text-primary mt-2">
@@ -1288,7 +1288,7 @@ onDestroy(() => {
     </div>
   {:else if stage === 7}
     <div
-      class="animate-fade-in-pop flex justify-center items-center h-full flex-col gap-6 p-10 w-full"
+      class="animate-fade-in-pop flex justify-center items-center flex-col gap-6 p-[clamp(1rem,4vw,2.5rem)] w-full"
     >
       <img src="./favicon.png" alt="OpenGameInstaller Logo" class="w-32 h-32" />
       <h1 class="text-3xl font-archivo font-semibold text-text-primary mt-2">
@@ -1420,7 +1420,7 @@ onDestroy(() => {
   }
 
   .oobe-community-stage {
-    @apply flex justify-start items-center h-full flex-col gap-4 p-6 w-full max-w-6xl;
+    @apply flex justify-start items-center flex-col gap-4 p-6 w-full max-w-6xl;
   }
 
   .oobe-tools-stage {
@@ -1587,7 +1587,8 @@ onDestroy(() => {
 
   .oobe-community-grid {
     @apply w-full grid gap-4 rounded-2xl border border-accent-light bg-surface p-4 overflow-y-auto;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* Three columns at the default window; fewer when the window is narrow. */
+    grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
     max-height: min(50vh, 470px);
   }
 

@@ -558,9 +558,13 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
     class="flex flex-col h-screen w-screen fixed left-0 top-0 bg-background-color"
   >
     <!-- Top Header -->
-    <header class="flex items-center justify-start w-full h-24 px-2">
+    <header
+      class="flex items-center justify-start w-full h-(--header-height) px-2 gap-2 shrink-0"
+    >
       <!-- Left side - Avatar/Logo -->
-      <div class="flex items-center justify-center h-24 w-24">
+      <div
+        class="flex items-center justify-center h-(--header-height) w-(--header-height) shrink-0"
+      >
         <img
           src="./favicon.png"
           alt="avatar"
@@ -569,7 +573,9 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
       </div>
 
       <!-- Center - Search Bar -->
-      <div class="flex flex-row items-center flex-auto max-w-2xl mx-8 gap-2">
+      <div
+        class="flex flex-row items-center flex-auto min-w-0 max-w-2xl mx-(--header-gutter) gap-2"
+      >
         {#if $headerBackButton.visible && $headerBackButton.onClick}
           <button
             class="header-button"
@@ -622,7 +628,7 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
             >
           </button>
         {/if}
-        <div class="relative flex-1">
+        <div class="relative flex-1 min-w-0">
           <svg
             class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-accent-dark transition-colors duration-300"
             fill="none"
@@ -642,7 +648,7 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
               ? 'Search for games...'
               : 'Search unavailable (offline)'}
             disabled={!$isOnline}
-            class="w-full h-(--header-button-size) pl-12 pr-4 text-lg bg-accent-lighter rounded-lg border-none focus:outline-none font-archivo text-text-primary placeholder-accent-dark caret-accent-dark disabled:text-text-muted disabled:opacity-50 transition-all duration-300 ease-out focus:bg-surface focus:shadow-md"
+            class="w-full min-w-0 h-(--header-button-size) pl-12 pr-4 text-lg bg-accent-lighter rounded-lg border-none focus:outline-none font-archivo text-text-primary placeholder-accent-dark caret-accent-dark disabled:text-text-muted disabled:opacity-50 transition-all duration-300 ease-out focus:bg-surface focus:shadow-md"
             value={$searchQuery}
             oninput={handleSearchInput}
           />
@@ -650,7 +656,7 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
       </div>
 
       <!-- Right side - Action buttons -->
-      <div class="flex items-center gap-4 -left-2 relative">
+      <div class="flex items-center gap-4 shrink-0 mr-2">
         <!-- Download button -->
         <button
           class="header-button relative"
@@ -721,10 +727,10 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
       </div>
     </header>
 
-    <div class="flex flex-1 pl-4 overflow-hidden">
+    <div class="flex flex-1 min-h-0 pl-4 overflow-hidden">
       <!-- Left Sidebar -->
       <nav
-        class="flex flex-col items-center w-20 h-full bg-background-color py-4"
+        class="flex flex-col items-center w-20 h-full shrink-0 bg-background-color py-4 overflow-y-auto"
       >
         <!-- Navigation buttons -->
         <div class="flex flex-col gap-4">
@@ -822,10 +828,10 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
 
       <!-- Main Content Area -->
       <main
-        class="flex-1 overflow-y-auto left-10 top-4 max-w-206 relative mb-10"
+        class="flex-1 min-w-0 overflow-y-auto relative mt-4 mb-(--content-bottom-gap) ml-(--content-gutter) mr-(--content-gutter)"
       >
         <!-- Content Container with absolute positioning for animations -->
-        <div class="content-container overflow-x-hidden">
+        <div class="content-container overflow-x-hidden @container">
           {#if showSearchResults}
             <!-- Search Results View -->
             <div
@@ -859,7 +865,7 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
 
               {#if !$isOnline}
                 <div
-                  class="flex flex-col gap-4 w-full justify-center items-center h-96"
+                  class="flex flex-col gap-4 w-full justify-center items-center py-16"
                 >
                   <img
                     src="./favicon.png"
@@ -1114,8 +1120,16 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
     --header-button-size: 3.5rem;
     --header-button-svg-size: 2rem;
 
-    /* Avatar sizing */
-    --avatar-size: 5rem;
+    /* Avatar sizing: 5rem at the default 700px window height, shrinks with short tiles */
+    --avatar-size: clamp(3.75rem, 11.5vh, 5rem);
+
+    /* Chrome around the content area. Values resolve to the original fixed
+       layout (6rem header, 2.5rem gutters, 2.5rem bottom gap) at 1000x700 and
+       tighten in small tiles instead of pushing content out of the window. */
+    --header-height: clamp(4.5rem, 13.75vh, 6rem);
+    --header-gutter: clamp(0.5rem, 3.2vw, 2rem);
+    --content-gutter: clamp(0.75rem, 4vw, 2.5rem);
+    --content-bottom-gap: clamp(1rem, 5.75vh, 2.5rem);
   }
 
   * {
@@ -1334,7 +1348,9 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
     }
   }
 
-  /* Content Animation Container */
+  /* Content Animation Container. It is also the size container the views
+     query (Tailwind @-variants), so views reflow against the space they get
+     rather than the window width. */
   .content-container {
     @apply relative w-full h-full;
   }

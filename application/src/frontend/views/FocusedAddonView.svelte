@@ -547,7 +547,7 @@ async function handleActionClick(key: string) {
             {@const optionDescription =
               selectedAddon.configTemplate[key].description}
             <div
-              class="flex flex-row gap-2 items-center relative"
+              class="flex flex-row flex-wrap gap-2 items-center relative"
               data-input-parent
             >
               <!-- Actions without a display name are labelled by their button alone -->
@@ -776,7 +776,8 @@ async function handleActionClick(key: string) {
   }
 
   .config-input {
-    @apply px-3 py-2 bg-surface rounded-lg border border-border text-base min-w-64 ml-auto text-text-primary;
+    @apply px-3 py-2 bg-surface rounded-lg border border-border text-base ml-auto text-text-primary;
+    min-width: min(16rem, 100%);
   }
 
   .config-input::placeholder {
@@ -784,7 +785,8 @@ async function handleActionClick(key: string) {
   }
 
   .config-input-container {
-    @apply min-w-64 ml-auto;
+    @apply ml-auto;
+    min-width: min(16rem, 100%);
   }
 
   .checkbox-container {
