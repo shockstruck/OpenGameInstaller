@@ -239,6 +239,14 @@ export class SteamArtworkError extends Data.TaggedError('SteamArtworkError')<{
   readonly cause?: unknown;
 }> {}
 
+export class SteamLaunchOptionsError extends Data.TaggedError(
+  'SteamLaunchOptionsError'
+)<{
+  readonly message: string;
+  readonly gameId: number;
+  readonly key: string;
+}> {}
+
 // =============================================================================
 // Updater Errors
 // =============================================================================

@@ -379,9 +379,7 @@ describe('Steam service', () => {
       type: 1,
       value: `"${appInfo.cwd}"`,
     });
-    expect(shortcut.launchOptions).toBe(
-      `"${process.execPath}" --game-id=${appID} --no-sandbox -- %command%`
-    );
+    expect(shortcut.launchOptions).toBe('PROTON_LOG=1 %command%');
     expect(committedConfig).toContain(`"${result.steamAppId}"`);
     expect(committedConfig).toContain('"name"\t"proton_experimental"');
     expect(
@@ -564,5 +562,55 @@ describe('Steam service', () => {
       type: 1,
       value: `"${path.dirname(appInfo.launchExecutable)}"`,
     });
+  });
+
+  test('writes the UMU environment and arguments into the launch options', async () => {
+    const appID = 3631296;
+    const appInfo: LibraryInfo = {
+      ...libraryInfo(appID),
+      launchArguments: 'DXVK_HUD=fps %command% --windowed',
+      umu: { umuId: 'umu:abc', dllOverrides: ['dinput8'] },
+    };
+    writeLibraryInfo(appInfo);
+    const steamRoot = path.join(ogiDirectory, 'direct-launch-steam');
+    const shortcutsPath = path.join(
+      steamRoot,
+      'userdata/100/config/shortcuts.vdf'
+    );
+    const location = locationFor(steamRoot, '100', shortcutsPath);
+    const root: BinaryVdfObject = new Map();
+    const repositoryLayer = Layer.succeed(SteamRepository, {
+      locate: Effect.succeed(location),
+      locateAll: Effect.succeed([location]),
+      readShortcuts: () => Effect.succeed({ root, shortcutsPath }),
+      writeShortcuts: () => Effect.void,
+      modifyShortcuts: (_location, mutation) =>
+        mutation({
+          root,
+          shortcutsPath,
+          configPath: path.join(location.root, 'config/config.vdf'),
+          configSource: '',
+          commit: () => Effect.void,
+          rollback: Effect.void,
+        }),
+    });
+    const layer = SteamServiceLive.pipe(
+      Layer.provide(Layer.merge(repositoryLayer, processLayer))
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* (yield* SteamService).add({ appID });
+      }).pipe(Effect.provide(layer))
+    );
+
+    const home = process.env.HOME || process.env.USERPROFILE;
+    const prefix = path.join(home ?? '', '.ogi-wine-prefixes', 'umu-abc');
+    const [shortcut] = readShortcuts(serializeBinaryVdf(root)).shortcuts;
+    expect(shortcut.executable).toBe(`"${appInfo.launchExecutable}"`);
+    expect(shortcut.launchOptions).toBe(
+      `DXVK_HUD=fps PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=${prefix} WINEPREFIX=${prefix} WINEDLLOVERRIDES=dinput8=n,b %command% --windowed`
+    );
+    expect(shortcut.launchOptions).not.toContain(process.execPath);
   });
 });

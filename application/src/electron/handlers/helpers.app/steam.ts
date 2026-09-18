@@ -4,6 +4,7 @@ import type { LibraryInfo } from '@ogi-sdk/connect';
 import {
   ConfigError,
   GameNotFound,
+  SteamLaunchOptionsError,
   SteamRunningError,
   SteamShortcutConflictError,
   SteamShortcutNotFoundError,
@@ -16,7 +17,11 @@ import {
   loadLibraryInfo,
   saveLibraryInfo,
 } from '@/electron/handlers/helpers.app/library.js';
-import { getOgiExecutablePath } from '@/electron/handlers/helpers.app/platform.js';
+import {
+  getHomeDir,
+  getOgiExecutablePath,
+} from '@/electron/handlers/helpers.app/platform.js';
+import { buildDirectSteamLaunchOptions } from '@/electron/handlers/helpers.app/steam-launch-options.js';
 import {
   copySteamGridArtwork,
   downloadSteamGridArtwork,
@@ -35,7 +40,6 @@ import {
 } from '@/electron/lib/steam-process.js';
 import {
   findOwnedShortcut,
-  quoteSteamPath,
   readShortcuts,
   removeOwnedShortcut,
   upsertShortcut,
@@ -57,6 +61,7 @@ export function getLegacyVersionedGameName(
 export type SteamServiceError =
   | ConfigError
   | GameNotFound
+  | SteamLaunchOptionsError
   | SteamRepositoryError
   | SteamProcessFailure
   | SteamRunningError
@@ -305,7 +310,15 @@ export const SteamServiceLive: Layer.Layer<
         const ogiExecutable = getOgiExecutablePath();
         const startDir =
           appInfo.cwd.trim() || dirname(appInfo.launchExecutable);
-        const launchOptions = `${quoteSteamPath(ogiExecutable)} --game-id=${options.appID} --no-sandbox -- %command%`;
+        // On Linux the shortcut's Exe is the game itself, so the launch
+        // options only carry the environment and arguments; nothing of ours
+        // runs at launch. Other platforms still launch through OGI.
+        const launchOptions =
+          process.platform === 'linux'
+            ? yield* buildDirectSteamLaunchOptions(appInfo, {
+                homeDirectory: getHomeDir(),
+              })
+            : `--game-id=${options.appID} --no-sandbox`;
         const mutation = repository.modifyShortcuts(
           location,
           ({
@@ -330,10 +343,7 @@ export const SteamServiceLive: Layer.Layer<
                       process.platform === 'linux'
                         ? startDir
                         : dirname(ogiExecutable),
-                    launchOptions:
-                      process.platform === 'linux'
-                        ? launchOptions
-                        : `--game-id=${options.appID} --no-sandbox`,
+                    launchOptions,
                     tags: ['OpenGameInstaller'],
                   }),
                 catch: (cause) =>
