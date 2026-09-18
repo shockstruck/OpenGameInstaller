@@ -32,6 +32,12 @@ import { runElectronEffect } from '@/electron/runtime.js';
 
 const logger = createLogger(LOGGER_PREFIXES.electron);
 
+const OGI_REPO_SLUG = 'shockstruck/OpenGameInstaller';
+
+export function buildReleaseListUrl(repoSlug: string): string {
+  return `https://api.github.com/repos/${repoSlug}/releases`;
+}
+
 function isDev() {
   return !app.isPackaged;
 }
@@ -311,16 +317,67 @@ function getSetupVersionFromRelease(release: GithubRelease): string | null {
   return match?.[1]?.trim() ?? null;
 }
 
-function compareReleaseOrder(a: GithubRelease, b: GithubRelease): number {
-  const versionA = semver.clean(a.tag_name);
-  const versionB = semver.clean(b.tag_name);
-
-  if (versionA && versionB) {
-    return semver.compare(versionB, versionA);
+// Fork releases are tagged `v<upstream>-ss.<n>`, e.g. `4.3.1-ss.1`. Unlike a
+// standard semver prerelease, `-ss.<n>` marks a ShockStruck build published
+// *after* `<upstream>`, so it must outrank the bare `<upstream>` tag instead
+// of being treated (per semver precedence rules) as a pre-release candidate
+// for it.
+function getForkBuildNumber(
+  prerelease: readonly (string | number)[]
+): number | null {
+  if (
+    prerelease.length === 2 &&
+    prerelease[0] === 'ss' &&
+    typeof prerelease[1] === 'number'
+  ) {
+    return prerelease[1];
   }
-  if (versionA) return -1;
-  if (versionB) return 1;
+  return null;
+}
+
+function compareMainVersion(a: semver.SemVer, b: semver.SemVer): number {
+  if (a.major !== b.major) return a.major > b.major ? 1 : -1;
+  if (a.minor !== b.minor) return a.minor > b.minor ? 1 : -1;
+  if (a.patch !== b.patch) return a.patch > b.patch ? 1 : -1;
   return 0;
+}
+
+// Returns positive when `tagA` is newer than `tagB`, negative when older, 0
+// when equal or when neither tag parses as semver.
+function compareVersionTags(
+  tagA: string | null | undefined,
+  tagB: string | null | undefined
+): number {
+  const parsedA = tagA ? semver.parse(tagA) : null;
+  const parsedB = tagB ? semver.parse(tagB) : null;
+
+  if (!parsedA && !parsedB) return 0;
+  if (!parsedA) return -1;
+  if (!parsedB) return 1;
+
+  const mainOrder = compareMainVersion(parsedA, parsedB);
+  if (mainOrder !== 0) return mainOrder;
+
+  const forkBuildA = getForkBuildNumber(parsedA.prerelease);
+  const forkBuildB = getForkBuildNumber(parsedB.prerelease);
+  if (forkBuildA !== null && forkBuildB !== null) {
+    return forkBuildA - forkBuildB;
+  }
+  if (forkBuildA !== null && parsedB.prerelease.length === 0) return 1;
+  if (forkBuildB !== null && parsedA.prerelease.length === 0) return -1;
+
+  return semver.compare(parsedA.version, parsedB.version);
+}
+
+export function isVersionNewer(
+  candidateTag: string | null | undefined,
+  baselineTag: string | null | undefined
+): boolean {
+  return compareVersionTags(candidateTag, baselineTag) > 0;
+}
+
+function compareReleaseOrder(a: GithubRelease, b: GithubRelease): number {
+  return -compareVersionTags(a.tag_name, b.tag_name);
 }
 
 function getSetupAsset(release: GithubRelease): ReleaseAsset | undefined {
@@ -923,27 +980,22 @@ export function checkIfInstallerUpdateAvailable(
     const bleedingEdge = existsSync(`${__dirname}/../bleeding-edge.txt`);
     // check for updates
     try {
-      const local = semver.coerce(localVersion.trim())?.version ?? '0.0.0';
-      const gitRepo = 'nat3z/OpenGameInstaller';
-      const releases = await axios.get(
-        `https://api.github.com/repos/${gitRepo}/releases`,
-        { timeout: 10000 } // 10 second timeout for update check
-      );
+      const local = localVersion.trim();
+      const releases = await axios.get(buildReleaseListUrl(OGI_REPO_SLUG), {
+        timeout: 10000, // 10 second timeout for update check
+      });
       const candidates = (releases.data as GithubRelease[])
         .flatMap((release) => {
           const setupVersion = getSetupVersionFromRelease(release);
-          const version = setupVersion
-            ? semver.coerce(setupVersion)?.version
-            : undefined;
           if (
-            !version ||
+            !setupVersion ||
+            !semver.parse(setupVersion) ||
             (!bleedingEdge && release.prerelease) ||
-            (setupVersion &&
-              semver.eq(setupVersion.trim(), localVersion.trim()))
+            semver.eq(setupVersion.trim(), local)
           ) {
             return [];
           }
-          return [{ release, version }];
+          return [{ release, setupVersion }];
         })
         .sort((a, b) => compareReleaseOrder(a.release, b.release));
       let latestRelease: GithubRelease | undefined = candidates[0]?.release;
@@ -951,10 +1003,7 @@ export function checkIfInstallerUpdateAvailable(
       // disable the release if we already have this version
       if (latestRelease) {
         const wantedVersion = getSetupVersionFromRelease(latestRelease);
-        const version = wantedVersion
-          ? semver.coerce(wantedVersion)?.version
-          : undefined;
-        if (!version || !semver.gt(version, local)) {
+        if (!wantedVersion || !isVersionNewer(wantedVersion, local)) {
           latestRelease = undefined;
         }
       }
