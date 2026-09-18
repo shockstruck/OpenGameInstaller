@@ -156,6 +156,10 @@ export const VERSION = app.getVersion();
 if (isGamescopeSession()) {
   app.commandLine.appendSwitch('ozone-platform', 'x11');
 }
+// Everywhere else, leave ozone-platform at its Electron 40 default ('auto'):
+// it already runs native Wayland when XDG_SESSION_TYPE=wayland (Electron
+// docs/breaking-changes.md, "Electron 38.0"), so tiling WMs like Hyprland
+// see a native Wayland toplevel with no extra switch needed.
 
 // check if NixOS using command -v nixos-rebuild
 logger.sync.info('continuing launch...');
@@ -401,8 +405,11 @@ function createWindow(options: { gameLaunchMode?: boolean } = {}) {
     },
     title: 'OpenGameInstaller',
     fullscreen: gameLaunchMode,
-    fullscreenable: gameLaunchMode,
-    resizable: gameLaunchMode,
+    // Outside gameLaunchMode, leave fullscreenable at its Electron default
+    // (true) instead of pinning it false, so the window behaves like a
+    // normal resizable toplevel under tiling WMs.
+    ...(gameLaunchMode ? { fullscreenable: true } : {}),
+    resizable: true,
     icon: join(app.getAppPath(), 'public/favicon.ico'),
     autoHideMenuBar: true,
     show: false,
