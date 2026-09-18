@@ -16,7 +16,6 @@ import {
 } from '@/electron/handlers/helpers.app/library.js';
 import { generateNotificationId } from '@/electron/handlers/helpers.app/notifications.js';
 import {
-  getCurrentUsername,
   getHomeDir,
   getOgiExecutablePath,
   getProtonPrefixPath,
@@ -32,7 +31,9 @@ import {
 } from '@/electron/handlers/helpers.app/steam.js';
 import {
   listSteamCompatibilityTools,
+  locateSteam,
   SteamRepositoryLive,
+  shouldAddGameToSteam,
 } from '@/electron/lib/steam-installation.js';
 import {
   getSteamCommandCandidates,
@@ -151,11 +152,18 @@ export function addDeckGameToSteam(
   mainWindow: BrowserWindow,
   appID: number
 ): Effect.Effect<void, SteamServiceError | FileSystemError> {
-  if (!isLinux() || getCurrentUsername()?.toLowerCase() !== 'deck') {
-    return Effect.void;
-  }
-
   return Effect.gen(function* () {
+    const linux = isLinux();
+    const steamFound = linux
+      ? yield* locateSteam().pipe(
+          Effect.map(() => true),
+          Effect.catchAll(() => Effect.succeed(false))
+        )
+      : false;
+    if (!shouldAddGameToSteam({ isLinux: linux, steamFound })) {
+      return;
+    }
+
     const result = yield* addUmuGameToSteam(mainWindow, { appID });
     if (result.status === 'cancelled') {
       sendNotification({
