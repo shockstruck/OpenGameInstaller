@@ -116,8 +116,13 @@ export function getNonSteamLaunchId(appId: number): string {
   return ((BigInt(appId >>> 0) << 32n) | 0x02000000n).toString();
 }
 
+// Legacy Electron-wrapper shortcuts (`--game-id=N`) and direct-launch
+// shortcuts (`OGI_GAME_ID=N`, an environment assignment ahead of
+// `%command%`) both carry the id; whichever appears first in the string wins.
+const GAME_ID_PATTERN = /(?:^|\s)(?:--game-id=|OGI_GAME_ID=)(\d+)(?=\s|$)/;
+
 const launchGameId = (launchOptions: string): number | undefined => {
-  const match = launchOptions.match(/(?:^|\s)--game-id=(\d+)(?=\s|$)/);
+  const match = launchOptions.match(GAME_ID_PATTERN);
   if (!match) return undefined;
   const value = Number.parseInt(match[1], 10);
   return Number.isSafeInteger(value) ? value : undefined;
@@ -162,7 +167,21 @@ export function findOwnedShortcut(
       });
     }
     if (knownMatches.length === 1) {
-      if (isOwned(knownMatches[0])) return knownMatches[0];
+      const candidate = knownMatches[0];
+      if (isOwned(candidate)) return candidate;
+      // Migration: a shortcut written before SHOC-452 (versions ss.1/ss.2) has
+      // no game-id marker at all, only the OGI tag and an appId that already
+      // encodes the game id (see generateNonSteamAppId). A same-knownAppId,
+      // OGI-tagged, markerless shortcut is therefore this game's own; claim it
+      // here so upsertShortcut's caller rewrites its LaunchOptions with
+      // `OGI_GAME_ID=`. Once that write lands, isOwned() above matches on the
+      // marker directly and this branch never fires again for that shortcut.
+      if (
+        isOgiTagged(candidate) &&
+        launchGameId(candidate.launchOptions) === undefined
+      ) {
+        return candidate;
+      }
       throw new SteamShortcutConflictError({
         message: `Steam shortcut app ID ${identity.knownAppId} is not owned by OpenGameInstaller game ${identity.gameId}`,
         gameId: identity.gameId,

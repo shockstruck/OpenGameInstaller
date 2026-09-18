@@ -379,7 +379,9 @@ describe('Steam service', () => {
       type: 1,
       value: `"${appInfo.cwd}"`,
     });
-    expect(shortcut.launchOptions).toBe('PROTON_LOG=1 %command%');
+    expect(shortcut.launchOptions).toBe(
+      `OGI_GAME_ID=${appID} PROTON_LOG=1 %command%`
+    );
     expect(committedConfig).toContain(`"${result.steamAppId}"`);
     expect(committedConfig).toContain('"name"\t"proton_experimental"');
     expect(
@@ -609,7 +611,7 @@ describe('Steam service', () => {
     const [shortcut] = readShortcuts(serializeBinaryVdf(root)).shortcuts;
     expect(shortcut.executable).toBe(`"${appInfo.launchExecutable}"`);
     expect(shortcut.launchOptions).toBe(
-      `DXVK_HUD=fps PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=${prefix} WINEPREFIX=${prefix} WINEDLLOVERRIDES=dinput8=n,b %command% --windowed`
+      `OGI_GAME_ID=${appID} DXVK_HUD=fps PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=${prefix} WINEPREFIX=${prefix} WINEDLLOVERRIDES=dinput8=n,b %command% --windowed`
     );
     expect(shortcut.launchOptions).not.toContain(process.execPath);
   });

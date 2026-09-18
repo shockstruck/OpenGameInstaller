@@ -38,11 +38,25 @@ const expectError = (
 };
 
 describe('buildDirectSteamLaunchOptions', () => {
-  test('a game without UMU and without arguments only sets PROTON_LOG', () => {
-    expect(expectOptions({})).toBe('PROTON_LOG=1 %command%');
+  test('a game without UMU and without arguments only sets OGI_GAME_ID and PROTON_LOG', () => {
+    expect(expectOptions({})).toBe('OGI_GAME_ID=1 PROTON_LOG=1 %command%');
     expect(expectOptions({ launchArguments: '   ' })).toBe(
-      'PROTON_LOG=1 %command%'
+      'OGI_GAME_ID=1 PROTON_LOG=1 %command%'
     );
+  });
+
+  test('OGI_GAME_ID is always the first token of the environment block', () => {
+    const options = expectOptions({ appID: 42 });
+    expect(options.startsWith('OGI_GAME_ID=42 ')).toBe(true);
+  });
+
+  test('drops a user-supplied OGI_GAME_ID override rather than letting it win', () => {
+    // SHOC-452 design: OGI reserves this key, so a launchEnv entry with the
+    // same name is dropped (and warned about) instead of overriding ours or
+    // appearing twice.
+    expect(
+      expectOptions({ appID: 7, launchEnv: { OGI_GAME_ID: '999' } })
+    ).toBe('OGI_GAME_ID=7 PROTON_LOG=1 %command%');
   });
 
   test('reproduces the wrapper environment for a UMU game', () => {
@@ -58,6 +72,7 @@ describe('buildDirectSteamLaunchOptions', () => {
     const prefix = `${home}/.ogi-wine-prefixes/umu-123`;
     expect(options).toBe(
       [
+        'OGI_GAME_ID=12345',
         'DXVK_HUD=fps',
         'PROTON_LOG=1',
         `STEAM_COMPAT_DATA_PATH=${prefix}`,
@@ -75,15 +90,17 @@ describe('buildDirectSteamLaunchOptions', () => {
         launchArguments: 'DXVK_HUD=fps %command%',
         launchEnv: { DXVK_HUD: '0', PROTONPATH: ' GE-Proton9-20 ' },
       })
-    ).toBe('DXVK_HUD=0 PROTONPATH=GE-Proton9-20 PROTON_LOG=1 %command%');
+    ).toBe(
+      'OGI_GAME_ID=1 DXVK_HUD=0 PROTONPATH=GE-Proton9-20 PROTON_LOG=1 %command%'
+    );
   });
 
   test('derives the default prefix from the UMU id', () => {
     expect(expectOptions({ umu: { umuId: 'steam:123' } })).toBe(
-      `PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=${home}/.ogi-wine-prefixes/umu-123 WINEPREFIX=${home}/.ogi-wine-prefixes/umu-123 %command%`
+      `OGI_GAME_ID=1 PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=${home}/.ogi-wine-prefixes/umu-123 WINEPREFIX=${home}/.ogi-wine-prefixes/umu-123 %command%`
     );
     expect(expectOptions({ umu: { umuId: 'umu:abc' } })).toBe(
-      `PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=${home}/.ogi-wine-prefixes/umu-abc WINEPREFIX=${home}/.ogi-wine-prefixes/umu-abc %command%`
+      `OGI_GAME_ID=1 PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=${home}/.ogi-wine-prefixes/umu-abc WINEPREFIX=${home}/.ogi-wine-prefixes/umu-abc %command%`
     );
   });
 
@@ -93,7 +110,7 @@ describe('buildDirectSteamLaunchOptions', () => {
         umu: { umuId: 'umu:abc', winePrefixPath: '/home/kevin/My Games/pfx' },
       })
     ).toBe(
-      "PROTON_LOG=1 STEAM_COMPAT_DATA_PATH='/home/kevin/My Games/pfx' WINEPREFIX='/home/kevin/My Games/pfx' %command%"
+      "OGI_GAME_ID=1 PROTON_LOG=1 STEAM_COMPAT_DATA_PATH='/home/kevin/My Games/pfx' WINEPREFIX='/home/kevin/My Games/pfx' %command%"
     );
   });
 
@@ -101,7 +118,7 @@ describe('buildDirectSteamLaunchOptions', () => {
     expect(
       expectOptions({ umu: { umuId: 'umu:abc', winePrefixPath: '/pfx' } }, null)
     ).toBe(
-      'PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=/pfx WINEPREFIX=/pfx %command%'
+      'OGI_GAME_ID=1 PROTON_LOG=1 STEAM_COMPAT_DATA_PATH=/pfx WINEPREFIX=/pfx %command%'
     );
     expect(expectError({ umu: { umuId: 'umu:abc' } }, null).key).toBe(
       'WINEPREFIX'
@@ -110,17 +127,19 @@ describe('buildDirectSteamLaunchOptions', () => {
 
   test('arguments without %command% follow it', () => {
     expect(expectOptions({ launchArguments: '--windowed' })).toBe(
-      'PROTON_LOG=1 %command% --windowed'
+      'OGI_GAME_ID=1 PROTON_LOG=1 %command% --windowed'
     );
     expect(
       expectOptions({ launchArguments: '-config "my config.cfg" --fps 60' })
-    ).toBe("PROTON_LOG=1 %command% -config 'my config.cfg' --fps 60");
+    ).toBe(
+      "OGI_GAME_ID=1 PROTON_LOG=1 %command% -config 'my config.cfg' --fps 60"
+    );
   });
 
   test('only arguments after %command% are kept when it is present', () => {
     expect(
       expectOptions({ launchArguments: 'gamemoderun %command% --windowed' })
-    ).toBe('PROTON_LOG=1 %command% --windowed');
+    ).toBe('OGI_GAME_ID=1 PROTON_LOG=1 %command% --windowed');
   });
 
   test('known launch variables in the arguments are not passed as arguments', () => {
@@ -128,7 +147,7 @@ describe('buildDirectSteamLaunchOptions', () => {
       expectOptions({
         launchArguments: '--foo WINEPREFIX=/elsewhere GAMEID=umu-1 --bar',
       })
-    ).toBe('PROTON_LOG=1 %command% --foo --bar');
+    ).toBe('OGI_GAME_ID=1 PROTON_LOG=1 %command% --foo --bar');
   });
 
   test('quotes shell-significant characters so the value stays literal', () => {
@@ -142,7 +161,7 @@ describe('buildDirectSteamLaunchOptions', () => {
         },
       })
     ).toBe(
-      `A='say "hi"' B='it'\\''s' C='$HOME/\`x\`\\y;z' D='' PROTON_LOG=1 %command%`
+      `OGI_GAME_ID=1 A='say "hi"' B='it'\\''s' C='$HOME/\`x\`\\y;z' D='' PROTON_LOG=1 %command%`
     );
   });
 
