@@ -3,7 +3,12 @@ import { createLogger, LOGGER_PREFIXES } from '@ogi-sdk/logger';
 import { Effect } from 'effect';
 import { getDownloadPath } from '@/frontend/lib/core/fs';
 import { finalizeDownloadCard } from '@/frontend/lib/downloads/events';
-import { safeDownloadPath } from '@/frontend/lib/downloads/paths';
+import {
+  dedupeFileNames,
+  safeDownloadPath,
+  sanitizePathSegment,
+  urlBasename,
+} from '@/frontend/lib/downloads/paths';
 import { BaseService } from '@/frontend/lib/downloads/services/BaseService';
 import { electronRpc } from '@/frontend/lib/electron-rpc';
 import type { SearchResultWithAddon } from '@/frontend/lib/tasks/runner';
@@ -192,39 +197,44 @@ export class RealDebridService extends BaseService {
         electronRpc.realdebrid.getTorrentInfo(torrentId),
         'Failed to load Real-Debrid torrent info'
       );
-      const download = yield* realDebridRpc(
-        electronRpc.realdebrid.unrestrictLink(torrentInfo.links[0]),
-        'Failed to unrestrict Real-Debrid link'
-      );
-      if (download === null) {
-        return yield* Effect.fail(
-          new DebridError({
-            message: 'Failed to unrestrict the link.',
-            service: 'realdebrid',
-          })
+
+      const resolvedDownloads: string[] = [];
+      for (const link of torrentInfo.links) {
+        const download = yield* realDebridRpc(
+          electronRpc.realdebrid.unrestrictLink(link),
+          'Failed to unrestrict Real-Debrid link'
         );
+        if (download === null) {
+          return yield* Effect.fail(
+            new DebridError({
+              message: 'Failed to unrestrict the link.',
+              service: 'realdebrid',
+            })
+          );
+        }
+        resolvedDownloads.push(download.download);
       }
 
-      const targetPath = safeDownloadPath(
-        getDownloadPath(),
-        result.name,
-        result.filename
-      );
-      const persistedFiles = [
-        {
-          name: result.filename ?? 'download',
-          path: targetPath,
-          downloadURL: download.download,
-        },
-      ];
+      const isSingleFile = resolvedDownloads.length === 1;
+      const targetPath = isSingleFile
+        ? safeDownloadPath(getDownloadPath(), result.name, result.filename)
+        : safeDownloadPath(getDownloadPath(), result.name);
+      const localNames = isSingleFile
+        ? [sanitizePathSegment(result.filename ?? 'download')]
+        : dedupeFileNames(resolvedDownloads.map((link) => urlBasename(link)));
+      const persistedFiles = resolvedDownloads.map((link, index) => ({
+        name: localNames[index],
+        path: isSingleFile ? targetPath : targetPath + localNames[index],
+        downloadURL: link,
+      }));
       const handshake = yield* realDebridRpc(
-        electronRpc.ddl.download([
-          {
-            link: download.download,
-            path: targetPath,
+        electronRpc.ddl.download(
+          resolvedDownloads.map((link, index) => ({
+            link,
+            path: persistedFiles[index].path,
             headers: { 'OGI-Parallel-Limit': '1' },
-          },
-        ]),
+          }))
+        ),
         'Failed to start Real-Debrid download'
       );
       if (handshake.status === 'error' || !handshake.id) {
@@ -250,7 +260,7 @@ export class RealDebridService extends BaseService {
       this.updateDownloadRequested(
         handshake,
         tempId,
-        download.download,
+        resolvedDownloads[0],
         targetPath,
         'realdebrid',
         result,
