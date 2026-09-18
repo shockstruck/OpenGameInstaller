@@ -123,8 +123,8 @@ let options: OptionsCategory[] = [
         displayName: 'Steam Compatibility Tool',
         description:
           'The Proton version Steam uses for shortcuts, read from your installed compatibility tools.',
-        defaultValue: 'proton_experimental',
-        value: 'proton_experimental',
+        defaultValue: 'auto',
+        value: 'auto',
         choice: [],
         type: 'string',
         condition: async () =>
@@ -580,7 +580,7 @@ async function saveSteamGridDbKey(): Promise<void> {
 }
 let selectedTorrentClientId: string = $state('webtorrent'); // Track selection reactively
 let selectedTheme: string = $state('light');
-let selectedCompatibilityTool: string = $state('proton_experimental');
+let selectedCompatibilityTool: string = $state('auto');
 let compatibilityTools: { id: string; name: string }[] = $state([]);
 
 // Loading states for addon management buttons
@@ -688,11 +688,15 @@ async function loadCompatibilityTools() {
   if (
     typeof storedTool === 'string' &&
     storedTool &&
+    storedTool !== 'auto' &&
     !tools.some((tool) => tool.id === storedTool)
   ) {
     tools.push({ id: storedTool, name: `${storedTool} (not installed)` });
   }
-  compatibilityTools = tools;
+  compatibilityTools = [
+    { id: 'auto', name: 'Automatic (Proton-CachyOS if installed)' },
+    ...tools,
+  ];
 }
 
 $effect(() => {

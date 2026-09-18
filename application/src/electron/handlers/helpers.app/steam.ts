@@ -27,6 +27,8 @@ import {
   downloadSteamGridArtwork,
 } from '@/electron/lib/steam-grid-db.js';
 import {
+  listSteamCompatibilityTools,
+  resolveSteamCompatibilityTool,
   type SteamLocation,
   SteamRepository,
   type SteamRepositoryError,
@@ -303,9 +305,16 @@ export const SteamServiceLive: Layer.Layer<
             : (options.oldSteamAppId ??
               appInfo.umu?.steamShortcutReaddId ??
               appInfo.umu?.steamShortcutId);
-        const compatibilityTool =
+        const compatibilityToolSetting =
           process.platform === 'linux'
             ? yield* getSteamCompatibilityTool()
+            : undefined;
+        const compatibilityTool =
+          compatibilityToolSetting !== undefined
+            ? resolveSteamCompatibilityTool(
+                compatibilityToolSetting,
+                listSteamCompatibilityTools()
+              )
             : undefined;
         const ogiExecutable = getOgiExecutablePath();
         const startDir =
@@ -367,11 +376,25 @@ export const SteamServiceLive: Layer.Layer<
                         null
                       );
                     }
-                    return updateSteamCompatToolMapping(
-                      source,
-                      upserted.appId,
-                      compatibilityTool ? compatibilityTool : null
-                    );
+                    if (compatibilityTool) {
+                      return updateSteamCompatToolMapping(
+                        source,
+                        upserted.appId,
+                        compatibilityTool
+                      );
+                    }
+                    // `auto` with nothing installed leaves any existing
+                    // mapping for the new appId untouched instead of
+                    // writing a name Steam cannot resolve or deleting a
+                    // user's own entry; an explicit blank setting still
+                    // clears the mapping as before.
+                    return compatibilityToolSetting === 'auto'
+                      ? source
+                      : updateSteamCompatToolMapping(
+                          source,
+                          upserted.appId,
+                          null
+                        );
                   },
                   catch: (cause) =>
                     new SteamVdfParseError({

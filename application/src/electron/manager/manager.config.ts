@@ -49,7 +49,7 @@ export function getSteamCompatibilityTool(): Effect.Effect<
       'general',
       'steamCompatibilityTool'
     );
-    if (value === undefined) return 'proton_experimental';
+    if (value === undefined) return 'auto';
     if (typeof value !== 'string') {
       return yield* Effect.fail(
         new ConfigError({
