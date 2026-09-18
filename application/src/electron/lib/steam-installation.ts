@@ -128,6 +128,69 @@ const officialProtonToolId = (directoryName: string): string | undefined => {
   return minor === '0' ? `proton_${major}` : `proton_${major}${minor}`;
 };
 
+const officialProtonVersion = (name: string): [number, number] | undefined => {
+  const version = /(\d+)\.(\d+)/.exec(name);
+  if (!version) return undefined;
+  const [, major, minor] = version;
+  return [Number(major), Number(minor)];
+};
+
+const CACHYOS_PATTERN = /proton-?cachyos/i;
+
+/**
+ * Resolve the `steamCompatibilityTool` setting to a concrete tool id.
+ *
+ * `auto` prefers an installed Proton-CachyOS build (the SLR x86_64_v3 build
+ * specifically, since that is the one packaged for the workstations),
+ * falling back through proton_experimental and the highest-versioned
+ * official Proton to `undefined` when nothing usable is installed. Any
+ * other setting is returned unchanged, even if the tool is not installed.
+ */
+export function resolveSteamCompatibilityTool(
+  setting: string,
+  tools: SteamCompatibilityTool[]
+): string | undefined {
+  if (setting !== 'auto') return setting;
+
+  const exactCachyOs = tools.find(
+    (tool) =>
+      tool.id.toLowerCase() === 'proton-cachyos' ||
+      tool.name.toLowerCase() === 'proton-cachyos'
+  );
+  if (exactCachyOs) return exactCachyOs.id;
+
+  const cachyOsV3 = tools.find(
+    (tool) =>
+      (CACHYOS_PATTERN.test(tool.id) || CACHYOS_PATTERN.test(tool.name)) &&
+      (tool.id.includes('x86_64_v3') || tool.name.includes('x86_64_v3'))
+  );
+  if (cachyOsV3) return cachyOsV3.id;
+
+  const cachyOsAny = tools.find(
+    (tool) => CACHYOS_PATTERN.test(tool.id) || CACHYOS_PATTERN.test(tool.name)
+  );
+  if (cachyOsAny) return cachyOsAny.id;
+
+  const experimental = tools.find((tool) => tool.id === 'proton_experimental');
+  if (experimental) return experimental.id;
+
+  const highestOfficial = tools
+    .map((tool) => ({ tool, version: officialProtonVersion(tool.name) }))
+    .filter(
+      (
+        entry
+      ): entry is { tool: SteamCompatibilityTool; version: [number, number] } =>
+        entry.version !== undefined
+    )
+    .sort(
+      (left, right) =>
+        right.version[0] - left.version[0] || right.version[1] - left.version[1]
+    )[0];
+  if (highestOfficial) return highestOfficial.tool.id;
+
+  return undefined;
+}
+
 const listDirectories = (parent: string): string[] => {
   try {
     return fs
