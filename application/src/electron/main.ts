@@ -161,14 +161,7 @@ if (isGamescopeSession()) {
 // docs/breaking-changes.md, "Electron 38.0"), so tiling WMs like Hyprland
 // see a native Wayland toplevel with no extra switch needed.
 
-// check if NixOS using command -v nixos-rebuild
 logger.sync.info('continuing launch...');
-logger.sync.info('NIXOS: ' + IS_NIXOS);
-if (IS_NIXOS) {
-  logger.sync.info(
-    'NixOS detected, but startup logic has been moved. If you have issues, please check startup.ts'
-  );
-}
 logger.sync.info('Running in directory: ' + __dirname);
 
 // disable hardware acceleration
@@ -720,6 +713,7 @@ app.on('ready', async () => {
   }
 
   await startupEnvironmentReady;
+  logger.sync.info('NIXOS: ' + IS_NIXOS);
   registerClientReadyListener();
 
   // Check if we're launching a specific game (--game-id flag from Steam)

@@ -4,6 +4,7 @@ import { createLogger, LOGGER_PREFIXES } from '@ogi-sdk/logger';
 import { Effect } from 'effect';
 import { onDestroy, onMount } from 'svelte';
 import AddonFailurePromptModal from '@/frontend/components/built/AddonFailurePromptModal.svelte';
+import { decideLaunchDispatch } from '@/frontend/lib/core/launch-dispatch';
 import { createLaunchPrompt } from '@/frontend/lib/core/launch-prompt.svelte';
 import { runFrontendEffect } from '@/frontend/lib/core/runtime';
 import { electronRpc } from '@/frontend/lib/electron-rpc';
@@ -70,7 +71,13 @@ onMount(async () => {
     gameName = libraryInfo.name;
     status = 'running';
 
-    if (isHookOnly && hookType) {
+    const dispatch = decideLaunchDispatch({
+      hookOnly: isHookOnly && hookType !== null,
+      hasWrapper: isWrapperLaunch && !!wrapperCommand,
+      hasUmu: !!libraryInfo.umu,
+    });
+
+    if (dispatch === 'hook' && hookType) {
       // Hook-only mode: run addon event without launching game.
       // No Launch Anyway prompt here — there is nothing to launch on
       // failure, so the app just reports and quits.
@@ -109,7 +116,7 @@ onMount(async () => {
         }, 5000);
         timeouts.push(t);
       }
-    } else if (isWrapperLaunch && wrapperCommand) {
+    } else if (dispatch === 'wrapper' && wrapperCommand) {
       // Wrapper mode: run pre-launch hooks, execute wrapper command exactly, then run post-launch hooks
       logger.sync.info(
         `[GameLaunchOverlay] Running wrapped launch for ${gameName}: ${wrapperCommand}`
@@ -186,7 +193,7 @@ onMount(async () => {
         }
       }, 2000);
       timeouts.push(t3);
-    } else if (libraryInfo.umu) {
+    } else if (dispatch === 'umu') {
       // Open the play page in the background and trigger the play button
       // so that the full PlayPage launch flow (addon pre-launch, etc.) runs
       launchOverlayPlayPageReady.set(undefined);
@@ -220,10 +227,36 @@ onMount(async () => {
       // The window will be hidden on game:launch and shown again on game:exit.
       status = 'running';
     } else {
-      status = 'error';
-      errorMessage =
-        'Game is not configured for Steam shortcut launching (UMU mode required)';
-      onError(errorMessage);
+      // No wrapper command and no UMU library data: fall back to the same
+      // direct launchGameFromLibrary() call the warm (in-app) launch path
+      // uses, via the app.launchGame RPC, instead of erroring out.
+      logger.sync.info(
+        `[GameLaunchOverlay] Launching ${gameName} directly (cold start, no wrapper/UMU)`
+      );
+      const directResult = await runFrontendEffect(
+        electronRpc.app.launchGame(String(gameId)).pipe(Effect.either)
+      );
+      if (directResult._tag === 'Left') {
+        const error = directResult.left;
+        logger.sync.error('[GameLaunchOverlay] Direct launch failed:', error);
+        status = 'error';
+        errorMessage = formatError(error) || 'Failed to launch game';
+        onError(errorMessage);
+        const t = setTimeout(() => {
+          if (isMounted) runFrontendEffect(electronRpc.app.quit());
+        }, 5000);
+        timeouts.push(t);
+        return;
+      }
+
+      status = 'success';
+      const t = setTimeout(() => {
+        if (isMounted) {
+          onComplete();
+          runFrontendEffect(electronRpc.app.quit());
+        }
+      }, 2000);
+      timeouts.push(t);
     }
   } catch (error) {
     logger.sync.error('[GameLaunchOverlay] Error launching game:', error);

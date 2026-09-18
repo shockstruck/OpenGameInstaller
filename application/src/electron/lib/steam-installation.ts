@@ -444,6 +444,15 @@ export function locateSteam(
   );
 }
 
+// Fork: the Deck-only gate on adding games to Steam was replaced with this —
+// any Linux workstation with a detected Steam installation qualifies.
+export function shouldAddGameToSteam(params: {
+  isLinux: boolean;
+  steamFound: boolean;
+}): boolean {
+  return params.isLinux && params.steamFound;
+}
+
 export function writeFileAtomic(
   filePath: string,
   contents: Buffer | string
