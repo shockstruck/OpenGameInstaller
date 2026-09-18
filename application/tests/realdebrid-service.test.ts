@@ -7,6 +7,7 @@ import { writable } from 'svelte/store';
 // plain svelte/store writable so importing the download services works.
 mock.module('@/frontend/store.svelte', () => ({
   currentDownloads: writable([]),
+  createNotification: () => {},
 }));
 
 const unrestrictLinkCalls: string[] = [];
