@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>OpenGameInstaller logo, monochrome</title>
+  <mask id="cutouts">
+    <rect width="512" height="512" fill="#fff"/>
+    <g fill="#000">
+      <path d="M140 196a10 10 0 0 1 10 10v22h22a10 10 0 0 1 10 10a10 10 0 0 1-10 10h-22v22a10 10 0 0 1-10 10a10 10 0 0 1-10-10v-22h-22a10 10 0 0 1-10-10a10 10 0 0 1 10-10h22v-22a10 10 0 0 1 10-10z"/>
+      <circle cx="350" cy="262" r="16"/>
+      <circle cx="394" cy="218" r="16"/>
+    </g>
+  </mask>
+  <g fill="currentColor" mask="url(#cutouts)">
+    <rect x="64" y="168" width="384" height="144" rx="72"/>
+    <circle cx="140" cy="300" r="76"/>
+    <circle cx="372" cy="300" r="76"/>
+  </g>
+</svg>
