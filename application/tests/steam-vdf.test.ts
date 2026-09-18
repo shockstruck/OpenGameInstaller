@@ -275,6 +275,59 @@ describe('Steam binary VDF codec and shortcut ownership', () => {
     ]);
   });
 
+  describe('claims a known-appId shortcut across every LaunchOptions generation (SHOC-452)', () => {
+    const knownAppId = 0x81234567;
+    const claim = (launchOptions: string, ogiTagged: boolean) =>
+      findOwnedShortcut(
+        [
+          {
+            index: '0',
+            fields: shortcutFields({
+              appId: { type: 2, value: knownAppId | 0 },
+              name: 'OGI Game',
+              executable: '/opt/OpenGameInstaller.AppImage',
+              launchOptions,
+              ogiTagged,
+            }),
+            appId: knownAppId,
+            appName: 'OGI Game',
+            executable: '"/opt/OpenGameInstaller.AppImage"',
+            launchOptions,
+            tags: ogiTagged ? ['OpenGameInstaller'] : [],
+          },
+        ],
+        {
+          gameId: 7,
+          knownAppId,
+          executable: '/opt/OpenGameInstaller.AppImage',
+        }
+      );
+
+    test('pre-fork "--game-id=N" shortcut is owned', () => {
+      expect(claim('--game-id=7 --no-sandbox', true)?.appId).toBe(knownAppId);
+    });
+
+    test('ss.1/ss.2 shortcut with no marker at all is owned (one-time migration)', () => {
+      expect(claim('PROTON_LOG=1 %command%', true)?.appId).toBe(knownAppId);
+    });
+
+    test('current "OGI_GAME_ID=N" shortcut is owned', () => {
+      expect(claim('OGI_GAME_ID=7 PROTON_LOG=1 %command%', true)?.appId).toBe(
+        knownAppId
+      );
+    });
+
+    test('a tagged shortcut carrying a different game\'s OGI_GAME_ID is not owned', () => {
+      expect(() =>
+        claim('OGI_GAME_ID=8 PROTON_LOG=1 %command%', true)
+      ).toThrow('is not owned by OpenGameInstaller');
+    });
+
+    test('an untagged shortcut with the same appId and no marker is not owned', () => {
+      expect(() => claim('', false)).toThrow('is not owned by OpenGameInstaller');
+    });
+  });
+
   test('generates distinct shortcut IDs for same-name games', () => {
     const first = generateNonSteamAppId(
       '/opt/OpenGameInstaller.AppImage',

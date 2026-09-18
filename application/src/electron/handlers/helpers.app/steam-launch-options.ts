@@ -11,6 +11,7 @@
 
 import type { LibraryInfo } from '@ogi-sdk/connect';
 import { SteamLaunchOptionsError } from '@ogi-sdk/errors';
+import { createLogger, LOGGER_PREFIXES } from '@ogi-sdk/logger';
 import { Effect } from 'effect';
 import { parseLaunchArgumentTokens } from '@/electron/lib/launch-command.js';
 import {
@@ -22,6 +23,11 @@ import {
   parseLaunchArgumentsAfterCommand,
   shellQuote,
 } from '@/electron/lib/launch-environment.js';
+
+const logger = createLogger(LOGGER_PREFIXES.electron);
+
+/** Reserved: carries the OGI game id so a re-sync can re-claim its own shortcut. */
+const OGI_GAME_ID_KEY = 'OGI_GAME_ID';
 
 export type DirectSteamLaunchInput = Pick<
   LibraryInfo,
@@ -64,9 +70,17 @@ export function buildDirectSteamLaunchOptions(
         new SteamLaunchOptionsError({ message, gameId: appInfo.appID, key })
       );
 
-    const environment = new Map<string, string>(
-      Object.entries(getEffectiveLaunchEnv(appInfo))
-    );
+    const environment = new Map<string, string>();
+    environment.set(OGI_GAME_ID_KEY, String(appInfo.appID));
+    for (const [key, value] of Object.entries(getEffectiveLaunchEnv(appInfo))) {
+      if (key === OGI_GAME_ID_KEY) {
+        yield* logger.warn(
+          `Ignoring user-supplied ${OGI_GAME_ID_KEY} launch environment variable for game ${appInfo.appID}: this key is reserved by OpenGameInstaller to re-claim its own Steam shortcut`
+        );
+        continue;
+      }
+      environment.set(key, value);
+    }
     environment.set('PROTON_LOG', '1');
     if (appInfo.umu) {
       if (!appInfo.umu.winePrefixPath && !options.homeDirectory) {
