@@ -364,7 +364,8 @@ export async function launchWithUmu(
  */
 export async function installRedistributablesWithUmu(
   appID: number,
-  reportProgress?: RedistributableProgressReporter
+  reportProgress?: RedistributableProgressReporter,
+  redistributablesOverride?: { name: string; path: string }[]
 ): Promise<'success' | 'partial' | 'failed' | 'not-found'> {
   if (!isLinux()) {
     reportProgress?.({
@@ -408,6 +409,10 @@ export async function installRedistributablesWithUmu(
       error: 'No UMU configuration found, cannot use UMU redistributable flow',
     });
     return 'failed';
+  }
+
+  if (redistributablesOverride) {
+    libraryInfo.redistributables = redistributablesOverride;
   }
 
   if (!libraryInfo.redistributables) {

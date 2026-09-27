@@ -12,6 +12,7 @@ import {
   isNumberOption,
   isStringOption,
 } from 'ogi-addon/config';
+import RedistributablesRepairModal from '@/frontend/components/built/RedistributablesRepairModal.svelte';
 import WineDllOverridesModal from '@/frontend/components/built/WineDllOverridesModal.svelte';
 import ButtonModal from '@/frontend/components/modal/ButtonModal.svelte';
 import CheckboxModal from '@/frontend/components/modal/CheckboxModal.svelte';
@@ -45,6 +46,7 @@ const UMU_PROTON_DEFAULT = 'umu-proton';
 
 let platform = $state<string>('');
 let showDllOverridesModal = $state(false);
+let showRedistributablesModal = $state(false);
 let showRemoveConfirm = $state(false);
 let protonOptions = $state<{ id: string; name: string }[]>([]);
 
@@ -153,6 +155,10 @@ function closeModal() {
 
 function openDllOverridesModal() {
   showDllOverridesModal = true;
+}
+
+function openRedistributablesModal() {
+  showRedistributablesModal = true;
 }
 
 function handleDllOverridesSave(dllOverrides: string[]) {
@@ -391,6 +397,12 @@ function getInputOptions(option: ConfigurationOptionWire): string[] {
               onclick={openDllOverridesModal}
               disabled={!canEditDllOverrides}
             />
+            <ButtonModal
+              text="Redistributables"
+              variant="secondary"
+              onclick={openRedistributablesModal}
+              disabled={!canEditDllOverrides}
+            />
           {/if}
         {/if}
       {/if}
@@ -492,5 +504,11 @@ function getInputOptions(option: ConfigurationOptionWire): string[] {
     onSave={handleDllOverridesSave}
     gameInfo={gameInfo}
     onClose={() => (showDllOverridesModal = false)}
+  />
+
+  <RedistributablesRepairModal
+    open={showRedistributablesModal}
+    gameInfo={gameInfo}
+    onClose={() => (showRedistributablesModal = false)}
   />
 {/if}
