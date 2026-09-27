@@ -22,6 +22,10 @@ import {
   parseAddonLink,
 } from '@/electron/lib/addon-links.js';
 import { isNixOSCommandResult } from '@/electron/lib/nix-detection.js';
+import {
+  hasUmuRunOverride,
+  resolveUmuRunExecutable,
+} from '@/electron/lib/umu-path.js';
 import { sendNotification } from '@/electron/main.js';
 import { Addon } from '@/electron/manager/manager.addon.js';
 import { __dirname } from '@/electron/manager/manager.paths.js';
@@ -31,7 +35,9 @@ const logger = createLogger(LOGGER_PREFIXES.electron);
 const UMU_RELEASES_URL =
   'https://api.github.com/repos/Open-Wine-Components/umu-launcher/releases/latest';
 const UMU_BIN_DIR = join(__dirname, 'bin', 'umu');
-const UMU_RUN_EXECUTABLE = join(UMU_BIN_DIR, 'umu-run');
+const UMU_RUN_EXECUTABLE = resolveUmuRunExecutable(
+  join(UMU_BIN_DIR, 'umu-run')
+);
 const UMU_TARBALL_PATH = join(UMU_BIN_DIR, 'umu-launcher-zipapp.tar');
 const UMU_VERSION_FILE = join(UMU_BIN_DIR, '.version');
 const UMU_LAST_CHECK_FILE = join(UMU_BIN_DIR, '.last-check');
@@ -259,6 +265,13 @@ function startUmuRecurringInterval() {
 
 export function startUmuBackgroundUpdater() {
   if (process.platform !== 'linux') {
+    return;
+  }
+
+  if (hasUmuRunOverride()) {
+    logger.sync.info(
+      `[umu] using external umu-run: ${UMU_RUN_EXECUTABLE}; skipping self-managed updater`
+    );
     return;
   }
 
@@ -905,6 +918,13 @@ export async function removeCachedAppUpdates() {
 }
 
 export async function downloadLatestUmu(): Promise<DownloadLatestUmuResult> {
+  if (hasUmuRunOverride()) {
+    logger.sync.info(
+      `[umu] using external umu-run: ${UMU_RUN_EXECUTABLE}; skipping version check and download`
+    );
+    return { success: true, updated: false };
+  }
+
   logger.sync.info('[umu] Checking local UMU version against latest release');
 
   let latestVersion = '';
