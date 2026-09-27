@@ -19,6 +19,12 @@ export const STEAMRIP_ADDON_FORK_URL =
 const UPSTREAM_STEAMRIP_ADDON_URL =
   'https://gitlab.com/fat-addons/steamrip-addon';
 
+export const FATBOY_UNPACK_FORK_URL =
+  'https://github.com/shockstruck/fatboy-unpack';
+
+const UPSTREAM_FATBOY_UNPACK_URL =
+  'https://gitlab.com/fat-addons/fatboy-unpack';
+
 const CURRENT_WEB_MARKETPLACE_SOURCE_BY_CANONICAL = new Map(
   CURRENT_WEB_MARKETPLACE_SOURCES.map((source) => [
     canonicalizeAddonSource(source),
@@ -258,6 +264,86 @@ export function needsSteamripForkRepair(
   if (installLogExists) return false;
 
   const forkCanonical = canonicalizeAddonSource(STEAMRIP_ADDON_FORK_URL);
+  return addons.some((addon) => {
+    const parsed = parseAddonLink(addon);
+    if (parsed.kind === 'local') return false;
+    return canonicalizeAddonSource(parsed.gitUrl) === forkCanonical;
+  });
+}
+
+/**
+ * Replaces any addon entry pointing at upstream's Fatboy unpack addon
+ * (marketplace or bare git form) with the ShockStruck fork, in place, without
+ * duplicating an already-migrated fork entry. Returns `replaced: false` and
+ * the input unchanged when no upstream entry is present.
+ */
+export function migrateUpstreamFatboyUnpackAddon(addons: readonly string[]): {
+  addons: string[];
+  replaced: boolean;
+} {
+  const forkAddonLink = `git@${FATBOY_UNPACK_FORK_URL}`;
+  const forkIdentity = getAddonLinkIdentity(forkAddonLink);
+  const upstreamCanonical = canonicalizeAddonSource(UPSTREAM_FATBOY_UNPACK_URL);
+
+  let replacedAny = false;
+  const rewritten = addons.map((addon) => {
+    const parsed = parseAddonLink(addon);
+    if (parsed.kind === 'local') return addon;
+    if (canonicalizeAddonSource(parsed.gitUrl) === upstreamCanonical) {
+      replacedAny = true;
+      return forkAddonLink;
+    }
+    return addon;
+  });
+
+  if (!replacedAny) {
+    return { addons: [...addons], replaced: false };
+  }
+
+  let seenFork = false;
+  const deduped = rewritten.filter((addon) => {
+    if (getAddonLinkIdentity(addon) !== forkIdentity) return true;
+    if (seenFork) return false;
+    seenFork = true;
+    return true;
+  });
+
+  return { addons: deduped, replaced: true };
+}
+
+/**
+ * Redirects any link form of upstream's Fatboy unpack addon (bare, `git@`, or
+ * marketplace form, in any case / `.git` / trailing-slash variant) to the
+ * ShockStruck fork's `git@` link. Every other addon link — including a
+ * `local` entry — is returned unchanged. Used at the "add addon" install
+ * step so a fresh add by the upstream URL resolves to the fork without
+ * changing how `normalizeAddonLink` treats stored config for any addon.
+ */
+export function redirectUpstreamFatboyUnpackAddonToFork(link: string): string {
+  const parsed = parseAddonLink(link);
+  if (parsed.kind === 'local') return link;
+
+  const upstreamCanonical = canonicalizeAddonSource(UPSTREAM_FATBOY_UNPACK_URL);
+  if (canonicalizeAddonSource(parsed.gitUrl) === upstreamCanonical) {
+    return `git@${FATBOY_UNPACK_FORK_URL}`;
+  }
+
+  return link;
+}
+
+/**
+ * Whether the Fatboy unpack fork needs a repair install: the addons list
+ * already names the fork (canonical `github.com/shockstruck/fatboy-unpack`,
+ * any link form) but its checkout's `installation.log` is missing — the
+ * signature of an install event that never reached the renderer.
+ */
+export function needsFatboyUnpackForkRepair(
+  addons: readonly string[],
+  installLogExists: boolean
+): boolean {
+  if (installLogExists) return false;
+
+  const forkCanonical = canonicalizeAddonSource(FATBOY_UNPACK_FORK_URL);
   return addons.some((addon) => {
     const parsed = parseAddonLink(addon);
     if (parsed.kind === 'local') return false;

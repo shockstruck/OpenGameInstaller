@@ -10,7 +10,9 @@ import semver from 'semver';
 import { addToDesktop } from '@/electron/handlers/helpers.app/desktop-shortcut.js';
 import {
   migrateNat3zSteamIntegrationAddon,
+  migrateUpstreamFatboyUnpackAddon,
   migrateUpstreamSteamripAddon,
+  needsFatboyUnpackForkRepair,
   needsSteamIntegrationForkRepair,
   needsSteamripForkRepair,
   normalizeAddonLink,
@@ -625,6 +627,92 @@ let migrations: {
         '[migration] steamrip-addon fork is configured but missing on disk; repairing install'
       );
       await sendIPCMessage('migration:event', 'install-steamrip-addon');
+    },
+  },
+  'migrate-fatboy-unpack-addon-to-fork': {
+    from: '0.0.0',
+    to: '4.3.1-ss.14',
+    description:
+      "Replaces upstream's Fatboy unpack addon with the ShockStruck fork.",
+    platform: 'all',
+    run: async () => {
+      const configPath = join(__dirname, 'config/option/general.json');
+      if (!fsSync.existsSync(configPath)) return;
+
+      const generalConfig = await fs.readFile(configPath, 'utf-8');
+      const generalConfigObj = JSON.parse(generalConfig) as {
+        addons?: unknown;
+      };
+      if (!Array.isArray(generalConfigObj.addons)) return;
+
+      const addons = generalConfigObj.addons.filter(
+        (addon): addon is string => typeof addon === 'string'
+      );
+      const { addons: migratedAddons, replaced } =
+        migrateUpstreamFatboyUnpackAddon(addons);
+      if (!replaced) {
+        logger.sync.info(
+          '[migration] no upstream fatboy-unpack entry to migrate'
+        );
+        return;
+      }
+
+      generalConfigObj.addons = migratedAddons;
+      await fs.writeFile(configPath, JSON.stringify(generalConfigObj));
+
+      const addonPath = join(__dirname, 'addons', 'fatboy-unpack');
+      if (fsSync.existsSync(addonPath)) {
+        await fs.rm(addonPath, { recursive: true, force: true });
+        logger.sync.info(
+          '[migration] removed existing upstream fatboy-unpack checkout'
+        );
+      }
+
+      await sendIPCMessage('migration:event', 'install-fatboy-unpack-addon');
+      logger.sync.info(
+        '[migration] migrated fatboy-unpack addon entry to the ShockStruck fork'
+      );
+    },
+  },
+  'repair-fatboy-unpack-addon-fork-install': {
+    from: '0.0.0',
+    to: '4.3.1-ss.14',
+    description:
+      'Repairs installs where the fatboy-unpack fork is configured in general.json but never cloned to disk.',
+    platform: 'all',
+    run: async () => {
+      const configPath = join(__dirname, 'config/option/general.json');
+      if (!fsSync.existsSync(configPath)) return;
+
+      const generalConfig = await fs.readFile(configPath, 'utf-8');
+      const generalConfigObj = JSON.parse(generalConfig) as {
+        addons?: unknown;
+      };
+      const addons = Array.isArray(generalConfigObj.addons)
+        ? generalConfigObj.addons.filter(
+            (addon): addon is string => typeof addon === 'string'
+          )
+        : [];
+
+      const installLogPath = join(
+        __dirname,
+        'addons',
+        'fatboy-unpack',
+        'installation.log'
+      );
+      const installLogExists = fsSync.existsSync(installLogPath);
+
+      if (!needsFatboyUnpackForkRepair(addons, installLogExists)) {
+        logger.sync.info(
+          '[migration] fatboy-unpack fork install does not need repair'
+        );
+        return;
+      }
+
+      logger.sync.info(
+        '[migration] fatboy-unpack fork is configured but missing on disk; repairing install'
+      );
+      await sendIPCMessage('migration:event', 'install-fatboy-unpack-addon');
     },
   },
 };
