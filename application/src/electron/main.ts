@@ -30,6 +30,7 @@ import {
   tagWindowForGamescope,
 } from '@/electron/lib/gamescope.js';
 import { releasePowerSaveBlock } from '@/electron/lib/power-save.js';
+import { quitFromTray } from '@/electron/lib/quit-from-tray.js';
 import { RendererEventReadiness } from '@/electron/lib/renderer-event-readiness.js';
 import {
   createSingleInstanceData,
@@ -808,8 +809,13 @@ app.on('ready', async () => {
     createAppTray({
       getWindow: () => mainWindow,
       onQuit: () => {
-        isQuitting = true;
-        app.quit();
+        quitFromTray({
+          setQuitting: () => {
+            isQuitting = true;
+          },
+          getWindows: () => BrowserWindow.getAllWindows(),
+          quit: () => app.quit(),
+        });
       },
     });
   }
