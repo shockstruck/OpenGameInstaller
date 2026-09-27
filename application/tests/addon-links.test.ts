@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  migrateNat3zSteamIntegrationAddon,
   normalizeAddonLink,
   parseAddonLink,
   replaceAddonLink,
+  STEAM_INTEGRATION_FORK_URL,
 } from '../src/electron/lib/addon-links';
 
 describe('marketplace addon refs', () => {
@@ -87,5 +89,90 @@ describe('marketplace addon refs', () => {
       )
     ).toEqual([replacement, 'git@https://github.com/example/other']);
     expect(replaceAddonLink([replacement], existing)).toEqual([existing]);
+  });
+});
+
+describe('steam-integration fork default', () => {
+  test('the fork link parses as a git-managed addon named steam-integration', () => {
+    const parsed = parseAddonLink(`git@${STEAM_INTEGRATION_FORK_URL}`);
+
+    expect(parsed.kind).toBe('git');
+    if (parsed.kind !== 'git') return;
+    expect(parsed.gitUrl).toBe(STEAM_INTEGRATION_FORK_URL);
+    expect(parsed.addonName).toBe('steam-integration');
+  });
+
+  test('the Nat3z URL still normalizes to a marketplace link', () => {
+    const parsed = parseAddonLink('https://github.com/Nat3z/steam-integration');
+
+    expect(parsed.kind).toBe('marketplace');
+    if (parsed.kind !== 'marketplace') return;
+    expect(parsed.marketplaceUrl).toBe('https://ogi-marketplace.nat3z.com');
+    expect(parsed.gitUrl).toBe('https://github.com/Nat3z/steam-integration');
+    expect(parsed.addonName).toBe('steam-integration');
+  });
+});
+
+describe('migrateNat3zSteamIntegrationAddon', () => {
+  test('replaces a marketplace-form Nat3z entry with the fork, in place', () => {
+    const result = migrateNat3zSteamIntegrationAddon([
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      'https://ogi-marketplace.nat3z.com@https://github.com/Nat3z/steam-integration',
+      'git@https://gitlab.com/fat-addons/steamrip-addon',
+    ]);
+
+    expect(result.replaced).toBe(true);
+    expect(result.addons).toEqual([
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      `git@${STEAM_INTEGRATION_FORK_URL}`,
+      'git@https://gitlab.com/fat-addons/steamrip-addon',
+    ]);
+  });
+
+  test('replaces a bare-form Nat3z entry with the fork, in place', () => {
+    const result = migrateNat3zSteamIntegrationAddon([
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      'https://github.com/Nat3z/steam-integration',
+    ]);
+
+    expect(result.replaced).toBe(true);
+    expect(result.addons).toEqual([
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      `git@${STEAM_INTEGRATION_FORK_URL}`,
+    ]);
+  });
+
+  test('does nothing when there is no Nat3z entry', () => {
+    const addons = [
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      'git@https://gitlab.com/fat-addons/steamrip-addon',
+    ];
+
+    const result = migrateNat3zSteamIntegrationAddon(addons);
+
+    expect(result.replaced).toBe(false);
+    expect(result.addons).toEqual(addons);
+  });
+
+  test('does nothing when the addon is already migrated to the fork', () => {
+    const addons = [
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      `git@${STEAM_INTEGRATION_FORK_URL}`,
+    ];
+
+    const result = migrateNat3zSteamIntegrationAddon(addons);
+
+    expect(result.replaced).toBe(false);
+    expect(result.addons).toEqual(addons);
+  });
+
+  test('does not duplicate the fork entry if both Nat3z and the fork are already present', () => {
+    const result = migrateNat3zSteamIntegrationAddon([
+      `git@${STEAM_INTEGRATION_FORK_URL}`,
+      'https://github.com/Nat3z/steam-integration',
+    ]);
+
+    expect(result.replaced).toBe(true);
+    expect(result.addons).toEqual([`git@${STEAM_INTEGRATION_FORK_URL}`]);
   });
 });

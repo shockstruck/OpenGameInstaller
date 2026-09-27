@@ -7,6 +7,11 @@ const CURRENT_WEB_MARKETPLACE_SOURCES = [
   'https://gitlab.com/fat-addons/steamrip-addon',
 ];
 
+export const STEAM_INTEGRATION_FORK_URL =
+  'https://github.com/shockstruck/steam-integration';
+
+const NAT3Z_STEAM_INTEGRATION_URL = 'https://github.com/Nat3z/steam-integration';
+
 const CURRENT_WEB_MARKETPLACE_SOURCE_BY_CANONICAL = new Map(
   CURRENT_WEB_MARKETPLACE_SOURCES.map((source) => [
     canonicalizeAddonSource(source),
@@ -107,6 +112,45 @@ export function replaceAddonLink(
 
   if (!inserted) updatedAddons.push(addonLink);
   return updatedAddons;
+}
+
+/**
+ * Replaces any addon entry pointing at Nat3z's steam-integration (marketplace
+ * or bare git form) with the ShockStruck fork, in place, without duplicating
+ * an already-migrated fork entry. Returns `replaced: false` and the input
+ * unchanged when no Nat3z entry is present.
+ */
+export function migrateNat3zSteamIntegrationAddon(
+  addons: readonly string[]
+): { addons: string[]; replaced: boolean } {
+  const forkAddonLink = `git@${STEAM_INTEGRATION_FORK_URL}`;
+  const forkIdentity = getAddonLinkIdentity(forkAddonLink);
+  const nat3zCanonical = canonicalizeAddonSource(NAT3Z_STEAM_INTEGRATION_URL);
+
+  let replacedAny = false;
+  const rewritten = addons.map((addon) => {
+    const parsed = parseAddonLink(addon);
+    if (parsed.kind === 'local') return addon;
+    if (canonicalizeAddonSource(parsed.gitUrl) === nat3zCanonical) {
+      replacedAny = true;
+      return forkAddonLink;
+    }
+    return addon;
+  });
+
+  if (!replacedAny) {
+    return { addons: [...addons], replaced: false };
+  }
+
+  let seenFork = false;
+  const deduped = rewritten.filter((addon) => {
+    if (getAddonLinkIdentity(addon) !== forkIdentity) return true;
+    if (seenFork) return false;
+    seenFork = true;
+    return true;
+  });
+
+  return { addons: deduped, replaced: true };
 }
 
 export function parseAddonLink(addonLink: string): ParsedAddonLink {
