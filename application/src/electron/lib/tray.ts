@@ -1,10 +1,27 @@
 import { createLogger, LOGGER_PREFIXES } from '@ogi-sdk/logger';
 import { app, type BrowserWindow, Menu, Tray } from 'electron';
 import { join } from 'path';
+import { createTrailingThrottle } from '@/electron/lib/tray-status-throttle.js';
 
 const logger = createLogger(LOGGER_PREFIXES.electron);
 
 let tray: Tray | null = null;
+
+const TRAY_STATUS_THROTTLE_MS = 2000;
+
+const applyTrayStatus = createTrailingThrottle((text) => {
+  tray?.setToolTip(text);
+}, TRAY_STATUS_THROTTLE_MS);
+
+/**
+ * Update the tray icon's tooltip with the current activity status, e.g. what
+ * is downloading and its progress. Throttled to at most one native call per
+ * `TRAY_STATUS_THROTTLE_MS`; a no-op when there is no tray icon (gamescope).
+ */
+export function setTrayStatus(text: string): void {
+  if (!tray) return;
+  applyTrayStatus(text);
+}
 
 /** Whether a tray icon currently exists for this process. */
 export function isTrayAvailable(): boolean {

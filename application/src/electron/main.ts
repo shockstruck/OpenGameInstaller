@@ -40,7 +40,11 @@ import {
   parseLaunchRequestFromArgv,
   parseWrapperAfterSeparator,
 } from '@/electron/lib/single-instance-launch.js';
-import { createAppTray, isTrayAvailable } from '@/electron/lib/tray.js';
+import {
+  createAppTray,
+  isTrayAvailable,
+  setTrayStatus,
+} from '@/electron/lib/tray.js';
 import { Addon } from '@/electron/manager/manager.addon.js';
 import { waitForAddonManifests } from '@/electron/manager/manager.addon-readiness.js';
 import { __dirname, isDev } from '@/electron/manager/manager.paths.js';
@@ -225,6 +229,11 @@ ipcMain.on('is-dev', (event) => {
 });
 ipcMain.on('get-version', (event) => {
   event.returnValue = VERSION;
+});
+
+/* Tray tooltip activity status; setTrayStatus no-ops when there is no tray. */
+ipcMain.on('tray:set-status', (_event, text: string) => {
+  setTrayStatus(text);
 });
 
 export let torrentIntervals: NodeJS.Timeout[] = [];
