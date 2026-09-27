@@ -42,6 +42,7 @@ import {
   shellQuote,
 } from '@/electron/lib/launch-environment.js';
 import { resolveSpawnInvocation } from '@/electron/lib/spawn-shell.js';
+import { resolveUmuRunExecutable } from '@/electron/lib/umu-path.js';
 import {
   resolveLegacyPrefixSource,
   stagedPrefixMigration as runStagedPrefixMigration,
@@ -76,7 +77,9 @@ function getUmuPrefixBase(): string {
   return getUmuPrefixBaseIn(getUmuPrefixHome());
 }
 
-const umuRunExecutable = path.join(__dirname, 'bin', 'umu', 'umu-run');
+const umuRunExecutable = resolveUmuRunExecutable(
+  path.join(__dirname, 'bin', 'umu', 'umu-run')
+);
 
 export { parseLaunchArgumentTokens } from '@/electron/lib/launch-command.js';
 export {
