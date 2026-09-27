@@ -22,6 +22,10 @@ import {
 } from '@/electron/handlers/handler.library.js';
 import { loadLibraryInfo } from '@/electron/handlers/helpers.app/library.js';
 import {
+  parseHiddenFlag,
+  shouldHideOnClose,
+} from '@/electron/lib/close-behavior.js';
+import {
   isGamescopeSession,
   tagWindowForGamescope,
 } from '@/electron/lib/gamescope.js';
@@ -35,6 +39,7 @@ import {
   parseLaunchRequestFromArgv,
   parseWrapperAfterSeparator,
 } from '@/electron/lib/single-instance-launch.js';
+import { createAppTray, isTrayAvailable } from '@/electron/lib/tray.js';
 import { Addon } from '@/electron/manager/manager.addon.js';
 import { waitForAddonManifests } from '@/electron/manager/manager.addon-readiness.js';
 import { __dirname, isDev } from '@/electron/manager/manager.paths.js';
@@ -225,6 +230,13 @@ export let torrentIntervals: NodeJS.Timeout[] = [];
 
 let mainWindow: BrowserWindow | null;
 
+// Set true by the tray's Quit item and by 'before-quit', so the close
+// handler below knows a real quit (not a hide-to-tray) is underway.
+let isQuitting = false;
+
+// Gamescope ignores --hidden entirely (design: no tray, no hidden start there).
+const startedHidden = parseHiddenFlag() && !isGamescopeSession();
+
 // Flag to ensure process-wide listeners are registered only once
 let listenersRegistered = false;
 
@@ -390,9 +402,15 @@ async function onMainAppReady() {
     });
   }
 
-  logger.sync.info('showing window');
-  mainWindow?.show();
-  mainWindow?.focus();
+  if (startedHidden) {
+    logger.sync.info(
+      '[tray] Started with --hidden; window stays hidden until shown from the tray or a second launch'
+    );
+  } else {
+    logger.sync.info('showing window');
+    mainWindow?.show();
+    mainWindow?.focus();
+  }
 
   if (ogiDebug()) {
     mainWindow?.webContents?.openDevTools();
@@ -505,15 +523,30 @@ function createWindow(options: { gameLaunchMode?: boolean } = {}) {
     mainWindow = null;
   });
 
+  mainWindow.on('close', (event) => {
+    if (
+      shouldHideOnClose({
+        isQuitting,
+        trayAvailable: isTrayAvailable(),
+        gamescope: isGamescopeSession(),
+      })
+    ) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   fs.mkdir(join(__dirname, 'config'), (_) => {});
 
   // First ready-to-show: splash is ready; show window so user sees loading
+  // (unless started with --hidden, in which case it stays hidden until shown
+  // from the tray or a second launch).
   mainWindow.once('ready-to-show', () => {
     if (gameLaunchMode && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.setResizable(true);
       mainWindow.setFullScreen(true);
     }
-    mainWindow?.show();
+    if (!startedHidden) mainWindow?.show();
     // Game Mode won't display an untagged Chromium window; tag after show so
     // the X11 window exists.
     if (mainWindow) void tagWindowForGamescope(mainWindow);
@@ -771,6 +804,16 @@ app.on('ready', async () => {
   logger.sync.info('NIXOS: ' + IS_NIXOS);
   registerClientReadyListener();
 
+  if (!isGamescopeSession()) {
+    createAppTray({
+      getWindow: () => mainWindow,
+      onQuit: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    });
+  }
+
   // Check if we're launching a specific game (--game-id flag from Steam)
   const gameIdToLaunch = parseGameIdArg();
   const hookArgs = parseLaunchHookArgs();
@@ -817,6 +860,12 @@ app.on('ready', async () => {
     registerMainHandlers(mainWindow);
     await startAppFlow(mainWindow);
   }
+});
+
+// A real quit (Cmd+Q, session shutdown, app.quit() from elsewhere) must close
+// the window rather than hide it to the tray.
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 // Quit when all windows are closed.
