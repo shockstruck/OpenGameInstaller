@@ -26,18 +26,6 @@ const CURRENT_WEB_MARKETPLACE_SOURCE_BY_CANONICAL = new Map(
   ])
 );
 
-// Unlike steam-integration's Nat3z entry, SteamRip's upstream GitLab URL resolves
-// straight to our fork on a fresh add, instead of the Nat3z marketplace listing,
-// because the marketplace listing still points at unforked upstream. Kept as its
-// own guarded lookup, checked ahead of the marketplace-source table, so it can't
-// affect how any other source normalizes.
-const FRESH_ADD_FORK_REDIRECT_BY_CANONICAL = new Map([
-  [
-    canonicalizeAddonSource(UPSTREAM_STEAMRIP_ADDON_URL),
-    STEAMRIP_ADDON_FORK_URL,
-  ],
-]);
-
 export function canonicalizeAddonSource(source: string): string {
   return source
     .trim()
@@ -86,13 +74,6 @@ export function normalizeAddonLink(addonLink: string): string {
     return trimmed;
   } else if (trimmed.startsWith('local:')) {
     return trimmed.replace(/^local:/, 'local@');
-  }
-
-  const forkRedirect = FRESH_ADD_FORK_REDIRECT_BY_CANONICAL.get(
-    canonicalizeAddonSource(trimmed)
-  );
-  if (forkRedirect) {
-    return `git@${forkRedirect}`;
   }
 
   const marketplaceSource = CURRENT_WEB_MARKETPLACE_SOURCE_BY_CANONICAL.get(
@@ -205,14 +186,6 @@ export function needsSteamIntegrationForkRepair(
  * or bare git form) with the ShockStruck fork, in place, without duplicating
  * an already-migrated fork entry. Returns `replaced: false` and the input
  * unchanged when no upstream entry is present.
- *
- * The bare-form and marketplace-form checks are done directly against the raw
- * entry's canonical source rather than via `parseAddonLink`, because
- * `normalizeAddonLink` now redirects a fresh bare upstream URL straight to the
- * fork (see `FRESH_ADD_FORK_REDIRECT_BY_CANONICAL`); routing a *stored* legacy
- * bare-form entry through that same normalization first would make it look
- * identical to an already-migrated fork entry and this migration would never
- * fire for it.
  */
 export function migrateUpstreamSteamripAddon(addons: readonly string[]): {
   addons: string[];
@@ -224,25 +197,11 @@ export function migrateUpstreamSteamripAddon(addons: readonly string[]): {
     UPSTREAM_STEAMRIP_ADDON_URL
   );
 
-  const isUpstreamSteamripEntry = (addon: string): boolean => {
-    const trimmed = addon.trim();
-    if (
-      !trimmed ||
-      trimmed.startsWith('local@') ||
-      trimmed.startsWith('local:')
-    ) {
-      return false;
-    }
-    if (canonicalizeAddonSource(trimmed) === upstreamCanonical) return true;
-
-    const parsed = parseAddonLink(addon);
-    if (parsed.kind === 'local') return false;
-    return canonicalizeAddonSource(parsed.gitUrl) === upstreamCanonical;
-  };
-
   let replacedAny = false;
   const rewritten = addons.map((addon) => {
-    if (isUpstreamSteamripEntry(addon)) {
+    const parsed = parseAddonLink(addon);
+    if (parsed.kind === 'local') return addon;
+    if (canonicalizeAddonSource(parsed.gitUrl) === upstreamCanonical) {
       replacedAny = true;
       return forkAddonLink;
     }
@@ -262,6 +221,28 @@ export function migrateUpstreamSteamripAddon(addons: readonly string[]): {
   });
 
   return { addons: deduped, replaced: true };
+}
+
+/**
+ * Redirects any link form of upstream's SteamRip addon (bare, `git@`, or
+ * marketplace form, in any case / `.git` / trailing-slash variant) to the
+ * ShockStruck fork's `git@` link. Every other addon link — including a
+ * `local` entry — is returned unchanged. Used at the "add addon" install
+ * step so a fresh add by the upstream URL resolves to the fork without
+ * changing how `normalizeAddonLink` treats stored config for any addon.
+ */
+export function redirectUpstreamSteamripAddonToFork(link: string): string {
+  const parsed = parseAddonLink(link);
+  if (parsed.kind === 'local') return link;
+
+  const upstreamCanonical = canonicalizeAddonSource(
+    UPSTREAM_STEAMRIP_ADDON_URL
+  );
+  if (canonicalizeAddonSource(parsed.gitUrl) === upstreamCanonical) {
+    return `git@${STEAMRIP_ADDON_FORK_URL}`;
+  }
+
+  return link;
 }
 
 /**
