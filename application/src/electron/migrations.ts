@@ -10,6 +10,7 @@ import semver from 'semver';
 import { addToDesktop } from '@/electron/handlers/helpers.app/desktop-shortcut.js';
 import {
   migrateNat3zSteamIntegrationAddon,
+  needsSteamIntegrationForkRepair,
   normalizeAddonLink,
 } from '@/electron/lib/addon-links.js';
 import { migrateLegacySteamGridDbKey } from '@/electron/lib/steam-grid-db.js';
@@ -495,6 +496,47 @@ let migrations: {
       logger.sync.info(
         '[migration] migrated steam-integration addon entry to the ShockStruck fork'
       );
+    },
+  },
+  'repair-steam-integration-fork-install': {
+    from: '0.0.0',
+    to: '4.3.1-ss.7',
+    description:
+      'Repairs installs left by the ss.6 migration where the renderer install event fired before the window was ready, leaving the fork configured in general.json but never cloned to disk.',
+    platform: 'all',
+    run: async () => {
+      const configPath = join(__dirname, 'config/option/general.json');
+      if (!fsSync.existsSync(configPath)) return;
+
+      const generalConfig = await fs.readFile(configPath, 'utf-8');
+      const generalConfigObj = JSON.parse(generalConfig) as {
+        addons?: unknown;
+      };
+      const addons = Array.isArray(generalConfigObj.addons)
+        ? generalConfigObj.addons.filter(
+            (addon): addon is string => typeof addon === 'string'
+          )
+        : [];
+
+      const installLogPath = join(
+        __dirname,
+        'addons',
+        'steam-integration',
+        'installation.log'
+      );
+      const installLogExists = fsSync.existsSync(installLogPath);
+
+      if (!needsSteamIntegrationForkRepair(addons, installLogExists)) {
+        logger.sync.info(
+          '[migration] steam-integration fork install does not need repair'
+        );
+        return;
+      }
+
+      logger.sync.info(
+        '[migration] steam-integration fork is configured but missing on disk; repairing install'
+      );
+      await sendIPCMessage('migration:event', 'install-steam-addon');
     },
   },
 };

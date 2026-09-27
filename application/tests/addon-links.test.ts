@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   migrateNat3zSteamIntegrationAddon,
+  needsSteamIntegrationForkRepair,
   normalizeAddonLink,
   parseAddonLink,
   replaceAddonLink,
@@ -174,5 +175,38 @@ describe('migrateNat3zSteamIntegrationAddon', () => {
 
     expect(result.replaced).toBe(true);
     expect(result.addons).toEqual([`git@${STEAM_INTEGRATION_FORK_URL}`]);
+  });
+});
+
+describe('needsSteamIntegrationForkRepair', () => {
+  test('is true when the fork link is present with no install log', () => {
+    expect(
+      needsSteamIntegrationForkRepair(
+        [`git@${STEAM_INTEGRATION_FORK_URL}`],
+        false
+      )
+    ).toBe(true);
+  });
+
+  test('is false when the install log is present', () => {
+    expect(
+      needsSteamIntegrationForkRepair(
+        [`git@${STEAM_INTEGRATION_FORK_URL}`],
+        true
+      )
+    ).toBe(false);
+  });
+
+  test('is false when only the Nat3z entry is present', () => {
+    expect(
+      needsSteamIntegrationForkRepair(
+        ['https://github.com/Nat3z/steam-integration'],
+        false
+      )
+    ).toBe(false);
+  });
+
+  test('is false for an empty addons list', () => {
+    expect(needsSteamIntegrationForkRepair([], false)).toBe(false);
   });
 });

@@ -153,6 +153,26 @@ export function migrateNat3zSteamIntegrationAddon(
   return { addons: deduped, replaced: true };
 }
 
+/**
+ * Whether the steam-integration fork needs a repair install: the addons list
+ * already names the fork (canonical `github.com/shockstruck/steam-integration`,
+ * any link form) but its checkout's `installation.log` is missing — the
+ * signature of an install event that never reached the renderer.
+ */
+export function needsSteamIntegrationForkRepair(
+  addons: readonly string[],
+  installLogExists: boolean
+): boolean {
+  if (installLogExists) return false;
+
+  const forkCanonical = canonicalizeAddonSource(STEAM_INTEGRATION_FORK_URL);
+  return addons.some((addon) => {
+    const parsed = parseAddonLink(addon);
+    if (parsed.kind === 'local') return false;
+    return canonicalizeAddonSource(parsed.gitUrl) === forkCanonical;
+  });
+}
+
 export function parseAddonLink(addonLink: string): ParsedAddonLink {
   const normalized = normalizeAddonLink(addonLink);
 
