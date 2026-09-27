@@ -10,6 +10,7 @@ import { dirname, isAbsolute, join, resolve } from 'path';
 import {
   normalizeAddonLink,
   parseAddonLink,
+  redirectUpstreamFatboyUnpackAddonToFork,
   redirectUpstreamSteamripAddonToFork,
   replaceAddonLink,
 } from '@/electron/lib/addon-links.js';
@@ -248,6 +249,7 @@ export default function AddonManagerHandler(mainWindow: BrowserWindow) {
               .map((addon) => addon.trim())
               .filter(Boolean)
               .map(redirectUpstreamSteamripAddonToFork)
+              .map(redirectUpstreamFatboyUnpackAddonToFork)
           : [];
 
         const generalConfigPath = join(

@@ -11,6 +11,7 @@ import { quintOut } from 'svelte/easing';
 import { derived } from 'svelte/store';
 import { fade, fly, slide } from 'svelte/transition';
 import {
+  FATBOY_UNPACK_FORK_URL,
   STEAM_INTEGRATION_FORK_URL,
   STEAMRIP_ADDON_FORK_URL,
 } from '@/electron/lib/addon-links';
@@ -563,6 +564,15 @@ document.addEventListener(
     // go install steamrip-addon
     await runFrontendEffect(
       electronRpc.installAddons([`git@${STEAMRIP_ADDON_FORK_URL}`])
+    );
+  }
+);
+document.addEventListener(
+  'migration:event:install-fatboy-unpack-addon',
+  async () => {
+    // go install fatboy-unpack
+    await runFrontendEffect(
+      electronRpc.installAddons([`git@${FATBOY_UNPACK_FORK_URL}`])
     );
   }
 );
