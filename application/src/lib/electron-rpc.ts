@@ -241,6 +241,11 @@ export const ElectronRpc = {
       [Schema.Number],
       Schema.Literal('success', 'partial', 'failed', 'not-found')
     ),
+    repairRedistributables: rpc(
+      'app.repairRedistributables',
+      [Schema.Number, StringArray],
+      Schema.Literal('success', 'partial', 'failed', 'not-found', 'busy')
+    ),
     migrateToUmu: rpc(
       'app.migrateToUmu',
       [Schema.Number, OptionalNumber],
