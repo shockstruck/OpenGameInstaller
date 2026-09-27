@@ -67,6 +67,9 @@ const electronApi = {
     clientReadyForEvents: wrap(() =>
       ipcRenderer.send('client-ready-for-events')
     ),
+    setTrayStatus: wrap((text: string) =>
+      ipcRenderer.send('tray:set-status', text)
+    ),
   },
   getVersion: wrap(() => ipcRenderer.sendSync('get-version')),
   getTheme: wrap(() => ipcRenderer.sendSync('get-initial-theme')),

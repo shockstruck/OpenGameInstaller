@@ -20,6 +20,7 @@ import {
   unzipAndReturnOutputDir,
 } from '@/frontend/lib/setup/extraction';
 import { runSetupApp, runSetupAppUpdate } from '@/frontend/lib/setup/setup';
+import { formatTrayTooltip } from '@/frontend/lib/tray-status';
 import {
   createNotification,
   currentDownloads,
@@ -736,5 +737,17 @@ document.addEventListener('torrent:download-resumed', (event: Event) => {
   if (!isCustomEvent(event)) return;
   logger.sync.info('Torrent download resumed:', event.detail.id);
   // Status is already updated in resumeDownload function
+});
+
+// -- Tray tooltip activity status --
+// Sent to the main process, which throttles the native setToolTip call; kept
+// in the main process rather than here so it still lands while the window
+// is hidden and renderer timers are throttled.
+let lastTrayStatusText: string | undefined;
+currentDownloads.subscribe((downloads) => {
+  const text = formatTrayTooltip(downloads);
+  if (text === lastTrayStatusText) return;
+  lastTrayStatusText = text;
+  window.electronAPI?.app.setTrayStatus(text);
 });
 </script>
