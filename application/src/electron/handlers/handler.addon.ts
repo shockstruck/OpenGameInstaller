@@ -10,6 +10,7 @@ import { dirname, isAbsolute, join, resolve } from 'path';
 import {
   normalizeAddonLink,
   parseAddonLink,
+  redirectUpstreamSteamripAddonToFork,
   replaceAddonLink,
 } from '@/electron/lib/addon-links.js';
 import { AddonMarketplace } from '@/electron/lib/marketplace.js';
@@ -246,6 +247,7 @@ export default function AddonManagerHandler(mainWindow: BrowserWindow) {
               .filter((addon) => typeof addon === 'string')
               .map((addon) => addon.trim())
               .filter(Boolean)
+              .map(redirectUpstreamSteamripAddonToFork)
           : [];
 
         const generalConfigPath = join(

@@ -10,7 +10,14 @@ const CURRENT_WEB_MARKETPLACE_SOURCES = [
 export const STEAM_INTEGRATION_FORK_URL =
   'https://github.com/shockstruck/steam-integration';
 
-const NAT3Z_STEAM_INTEGRATION_URL = 'https://github.com/Nat3z/steam-integration';
+const NAT3Z_STEAM_INTEGRATION_URL =
+  'https://github.com/Nat3z/steam-integration';
+
+export const STEAMRIP_ADDON_FORK_URL =
+  'https://github.com/shockstruck/steamrip-addon';
+
+const UPSTREAM_STEAMRIP_ADDON_URL =
+  'https://gitlab.com/fat-addons/steamrip-addon';
 
 const CURRENT_WEB_MARKETPLACE_SOURCE_BY_CANONICAL = new Map(
   CURRENT_WEB_MARKETPLACE_SOURCES.map((source) => [
@@ -120,9 +127,10 @@ export function replaceAddonLink(
  * an already-migrated fork entry. Returns `replaced: false` and the input
  * unchanged when no Nat3z entry is present.
  */
-export function migrateNat3zSteamIntegrationAddon(
-  addons: readonly string[]
-): { addons: string[]; replaced: boolean } {
+export function migrateNat3zSteamIntegrationAddon(addons: readonly string[]): {
+  addons: string[];
+  replaced: boolean;
+} {
   const forkAddonLink = `git@${STEAM_INTEGRATION_FORK_URL}`;
   const forkIdentity = getAddonLinkIdentity(forkAddonLink);
   const nat3zCanonical = canonicalizeAddonSource(NAT3Z_STEAM_INTEGRATION_URL);
@@ -166,6 +174,90 @@ export function needsSteamIntegrationForkRepair(
   if (installLogExists) return false;
 
   const forkCanonical = canonicalizeAddonSource(STEAM_INTEGRATION_FORK_URL);
+  return addons.some((addon) => {
+    const parsed = parseAddonLink(addon);
+    if (parsed.kind === 'local') return false;
+    return canonicalizeAddonSource(parsed.gitUrl) === forkCanonical;
+  });
+}
+
+/**
+ * Replaces any addon entry pointing at upstream's SteamRip addon (marketplace
+ * or bare git form) with the ShockStruck fork, in place, without duplicating
+ * an already-migrated fork entry. Returns `replaced: false` and the input
+ * unchanged when no upstream entry is present.
+ */
+export function migrateUpstreamSteamripAddon(addons: readonly string[]): {
+  addons: string[];
+  replaced: boolean;
+} {
+  const forkAddonLink = `git@${STEAMRIP_ADDON_FORK_URL}`;
+  const forkIdentity = getAddonLinkIdentity(forkAddonLink);
+  const upstreamCanonical = canonicalizeAddonSource(
+    UPSTREAM_STEAMRIP_ADDON_URL
+  );
+
+  let replacedAny = false;
+  const rewritten = addons.map((addon) => {
+    const parsed = parseAddonLink(addon);
+    if (parsed.kind === 'local') return addon;
+    if (canonicalizeAddonSource(parsed.gitUrl) === upstreamCanonical) {
+      replacedAny = true;
+      return forkAddonLink;
+    }
+    return addon;
+  });
+
+  if (!replacedAny) {
+    return { addons: [...addons], replaced: false };
+  }
+
+  let seenFork = false;
+  const deduped = rewritten.filter((addon) => {
+    if (getAddonLinkIdentity(addon) !== forkIdentity) return true;
+    if (seenFork) return false;
+    seenFork = true;
+    return true;
+  });
+
+  return { addons: deduped, replaced: true };
+}
+
+/**
+ * Redirects any link form of upstream's SteamRip addon (bare, `git@`, or
+ * marketplace form, in any case / `.git` / trailing-slash variant) to the
+ * ShockStruck fork's `git@` link. Every other addon link — including a
+ * `local` entry — is returned unchanged. Used at the "add addon" install
+ * step so a fresh add by the upstream URL resolves to the fork without
+ * changing how `normalizeAddonLink` treats stored config for any addon.
+ */
+export function redirectUpstreamSteamripAddonToFork(link: string): string {
+  const parsed = parseAddonLink(link);
+  if (parsed.kind === 'local') return link;
+
+  const upstreamCanonical = canonicalizeAddonSource(
+    UPSTREAM_STEAMRIP_ADDON_URL
+  );
+  if (canonicalizeAddonSource(parsed.gitUrl) === upstreamCanonical) {
+    return `git@${STEAMRIP_ADDON_FORK_URL}`;
+  }
+
+  return link;
+}
+
+/**
+ * Whether the SteamRip fork needs a repair install: the addons list already
+ * names the fork (canonical `github.com/shockstruck/steamrip-addon`, any link
+ * form) but its checkout's `installation.log` is missing — the signature of an
+ * install event that never reached the renderer.
+ */
+export function needsSteamripForkRepair(
+  addons: readonly string[],
+  installLogExists: boolean
+): boolean {
+  if (installLogExists) return false;
+
+  const forkCanonical = canonicalizeAddonSource(STEAMRIP_ADDON_FORK_URL);
   return addons.some((addon) => {
     const parsed = parseAddonLink(addon);
     if (parsed.kind === 'local') return false;

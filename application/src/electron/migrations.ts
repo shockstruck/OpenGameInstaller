@@ -10,7 +10,9 @@ import semver from 'semver';
 import { addToDesktop } from '@/electron/handlers/helpers.app/desktop-shortcut.js';
 import {
   migrateNat3zSteamIntegrationAddon,
+  migrateUpstreamSteamripAddon,
   needsSteamIntegrationForkRepair,
+  needsSteamripForkRepair,
   normalizeAddonLink,
 } from '@/electron/lib/addon-links.js';
 import { migrateLegacySteamGridDbKey } from '@/electron/lib/steam-grid-db.js';
@@ -537,6 +539,92 @@ let migrations: {
         '[migration] steam-integration fork is configured but missing on disk; repairing install'
       );
       await sendIPCMessage('migration:event', 'install-steam-addon');
+    },
+  },
+  'migrate-steamrip-addon-to-fork': {
+    from: '0.0.0',
+    to: '4.3.1-ss.13',
+    description:
+      "Replaces upstream's SteamRip addon with the ShockStruck fork.",
+    platform: 'all',
+    run: async () => {
+      const configPath = join(__dirname, 'config/option/general.json');
+      if (!fsSync.existsSync(configPath)) return;
+
+      const generalConfig = await fs.readFile(configPath, 'utf-8');
+      const generalConfigObj = JSON.parse(generalConfig) as {
+        addons?: unknown;
+      };
+      if (!Array.isArray(generalConfigObj.addons)) return;
+
+      const addons = generalConfigObj.addons.filter(
+        (addon): addon is string => typeof addon === 'string'
+      );
+      const { addons: migratedAddons, replaced } =
+        migrateUpstreamSteamripAddon(addons);
+      if (!replaced) {
+        logger.sync.info(
+          '[migration] no upstream steamrip-addon entry to migrate'
+        );
+        return;
+      }
+
+      generalConfigObj.addons = migratedAddons;
+      await fs.writeFile(configPath, JSON.stringify(generalConfigObj));
+
+      const addonPath = join(__dirname, 'addons', 'steamrip-addon');
+      if (fsSync.existsSync(addonPath)) {
+        await fs.rm(addonPath, { recursive: true, force: true });
+        logger.sync.info(
+          '[migration] removed existing upstream steamrip-addon checkout'
+        );
+      }
+
+      await sendIPCMessage('migration:event', 'install-steamrip-addon');
+      logger.sync.info(
+        '[migration] migrated steamrip-addon entry to the ShockStruck fork'
+      );
+    },
+  },
+  'repair-steamrip-addon-fork-install': {
+    from: '0.0.0',
+    to: '4.3.1-ss.13',
+    description:
+      'Repairs installs where the steamrip-addon fork is configured in general.json but never cloned to disk.',
+    platform: 'all',
+    run: async () => {
+      const configPath = join(__dirname, 'config/option/general.json');
+      if (!fsSync.existsSync(configPath)) return;
+
+      const generalConfig = await fs.readFile(configPath, 'utf-8');
+      const generalConfigObj = JSON.parse(generalConfig) as {
+        addons?: unknown;
+      };
+      const addons = Array.isArray(generalConfigObj.addons)
+        ? generalConfigObj.addons.filter(
+            (addon): addon is string => typeof addon === 'string'
+          )
+        : [];
+
+      const installLogPath = join(
+        __dirname,
+        'addons',
+        'steamrip-addon',
+        'installation.log'
+      );
+      const installLogExists = fsSync.existsSync(installLogPath);
+
+      if (!needsSteamripForkRepair(addons, installLogExists)) {
+        logger.sync.info(
+          '[migration] steamrip-addon fork install does not need repair'
+        );
+        return;
+      }
+
+      logger.sync.info(
+        '[migration] steamrip-addon fork is configured but missing on disk; repairing install'
+      );
+      await sendIPCMessage('migration:event', 'install-steamrip-addon');
     },
   },
 };

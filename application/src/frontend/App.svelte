@@ -10,7 +10,10 @@ import { onMount } from 'svelte';
 import { quintOut } from 'svelte/easing';
 import { derived } from 'svelte/store';
 import { fade, fly, slide } from 'svelte/transition';
-import { STEAM_INTEGRATION_FORK_URL } from '@/electron/lib/addon-links';
+import {
+  STEAM_INTEGRATION_FORK_URL,
+  STEAMRIP_ADDON_FORK_URL,
+} from '@/electron/lib/addon-links';
 import GameImage from '@/frontend/components/GameImage.svelte';
 import GameLaunchOverlay from '@/frontend/components/GameLaunchOverlay.svelte';
 import ConfigurationModal from '@/frontend/components/modal/ConfigurationModal.svelte';
@@ -554,6 +557,15 @@ document.addEventListener('migration:event:install-steam-addon', async () => {
     electronRpc.installAddons([`git@${STEAM_INTEGRATION_FORK_URL}`])
   );
 });
+document.addEventListener(
+  'migration:event:install-steamrip-addon',
+  async () => {
+    // go install steamrip-addon
+    await runFrontendEffect(
+      electronRpc.installAddons([`git@${STEAMRIP_ADDON_FORK_URL}`])
+    );
+  }
+);
 </script>
 
 <RootPasswordGranter />

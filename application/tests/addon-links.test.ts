@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import {
   migrateNat3zSteamIntegrationAddon,
+  migrateUpstreamSteamripAddon,
   needsSteamIntegrationForkRepair,
+  needsSteamripForkRepair,
   normalizeAddonLink,
   parseAddonLink,
+  redirectUpstreamSteamripAddonToFork,
   replaceAddonLink,
   STEAM_INTEGRATION_FORK_URL,
+  STEAMRIP_ADDON_FORK_URL,
 } from '../src/electron/lib/addon-links';
 
 describe('marketplace addon refs', () => {
@@ -208,5 +212,200 @@ describe('needsSteamIntegrationForkRepair', () => {
 
   test('is false for an empty addons list', () => {
     expect(needsSteamIntegrationForkRepair([], false)).toBe(false);
+  });
+});
+
+describe('steamrip-addon fork default', () => {
+  test('the fork link parses as a git-managed addon named steamrip-addon', () => {
+    const parsed = parseAddonLink(`git@${STEAMRIP_ADDON_FORK_URL}`);
+
+    expect(parsed.kind).toBe('git');
+    if (parsed.kind !== 'git') return;
+    expect(parsed.gitUrl).toBe(STEAMRIP_ADDON_FORK_URL);
+    expect(parsed.addonName).toBe('steamrip-addon');
+  });
+
+  test('the upstream GitLab URL still normalizes to a marketplace link', () => {
+    const parsed = parseAddonLink('https://gitlab.com/fat-addons/steamrip-addon');
+
+    expect(parsed.kind).toBe('marketplace');
+    if (parsed.kind !== 'marketplace') return;
+    expect(parsed.marketplaceUrl).toBe('https://ogi-marketplace.nat3z.com');
+    expect(parsed.gitUrl).toBe('https://gitlab.com/fat-addons/steamrip-addon');
+    expect(parsed.addonName).toBe('steamrip-addon');
+  });
+});
+
+describe('redirectUpstreamSteamripAddonToFork', () => {
+  test('redirects a bare upstream URL to the fork', () => {
+    expect(
+      redirectUpstreamSteamripAddonToFork(
+        'https://gitlab.com/fat-addons/steamrip-addon'
+      )
+    ).toBe(`git@${STEAMRIP_ADDON_FORK_URL}`);
+  });
+
+  test('redirects a git@ upstream URL to the fork', () => {
+    expect(
+      redirectUpstreamSteamripAddonToFork(
+        'git@https://gitlab.com/fat-addons/steamrip-addon'
+      )
+    ).toBe(`git@${STEAMRIP_ADDON_FORK_URL}`);
+  });
+
+  test('redirects the marketplace-form upstream entry to the fork', () => {
+    expect(
+      redirectUpstreamSteamripAddonToFork(
+        'https://ogi-marketplace.nat3z.com@https://gitlab.com/fat-addons/steamrip-addon'
+      )
+    ).toBe(`git@${STEAMRIP_ADDON_FORK_URL}`);
+  });
+
+  test('redirects .git-suffixed, trailing-slash, and mixed-case variants to the fork', () => {
+    for (const variant of [
+      'https://GitLab.com/fat-addons/steamrip-addon',
+      'https://gitlab.com/fat-addons/steamrip-addon/',
+      'https://gitlab.com/fat-addons/steamrip-addon.git',
+    ]) {
+      expect(redirectUpstreamSteamripAddonToFork(variant)).toBe(
+        `git@${STEAMRIP_ADDON_FORK_URL}`
+      );
+    }
+  });
+
+  test('leaves an already-migrated fork link unchanged', () => {
+    const link = `git@${STEAMRIP_ADDON_FORK_URL}`;
+    expect(redirectUpstreamSteamripAddonToFork(link)).toBe(link);
+  });
+
+  test('leaves another addon unchanged', () => {
+    const link = 'git@https://gitlab.com/fat-addons/fatboy-unpack';
+    expect(redirectUpstreamSteamripAddonToFork(link)).toBe(link);
+  });
+
+  test('leaves a local addon entry unchanged', () => {
+    const link = 'local@/home/user/my-addon';
+    expect(redirectUpstreamSteamripAddonToFork(link)).toBe(link);
+  });
+});
+
+describe('migrateUpstreamSteamripAddon', () => {
+  test('replaces a marketplace-form upstream entry with the fork, in place', () => {
+    const result = migrateUpstreamSteamripAddon([
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      'https://ogi-marketplace.nat3z.com@https://gitlab.com/fat-addons/steamrip-addon',
+      `git@${STEAM_INTEGRATION_FORK_URL}`,
+    ]);
+
+    expect(result.replaced).toBe(true);
+    expect(result.addons).toEqual([
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      `git@${STEAMRIP_ADDON_FORK_URL}`,
+      `git@${STEAM_INTEGRATION_FORK_URL}`,
+    ]);
+  });
+
+  test('replaces a bare-form upstream entry with the fork, in place', () => {
+    const result = migrateUpstreamSteamripAddon([
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      'https://gitlab.com/fat-addons/steamrip-addon',
+    ]);
+
+    expect(result.replaced).toBe(true);
+    expect(result.addons).toEqual([
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      `git@${STEAMRIP_ADDON_FORK_URL}`,
+    ]);
+  });
+
+  test('replaces a .git-suffixed, trailing-slash, or mixed-case upstream entry with the fork', () => {
+    const result = migrateUpstreamSteamripAddon([
+      'git@https://GitLab.com/fat-addons/steamrip-addon.git/',
+    ]);
+
+    expect(result.replaced).toBe(true);
+    expect(result.addons).toEqual([`git@${STEAMRIP_ADDON_FORK_URL}`]);
+  });
+
+  test('does nothing when there is no upstream entry', () => {
+    const addons = [
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      `git@${STEAM_INTEGRATION_FORK_URL}`,
+    ];
+
+    const result = migrateUpstreamSteamripAddon(addons);
+
+    expect(result.replaced).toBe(false);
+    expect(result.addons).toEqual(addons);
+  });
+
+  test('does nothing when the addon is already migrated to the fork', () => {
+    const addons = [
+      'git@https://gitlab.com/fat-addons/fatboy-unpack',
+      `git@${STEAMRIP_ADDON_FORK_URL}`,
+    ];
+
+    const result = migrateUpstreamSteamripAddon(addons);
+
+    expect(result.replaced).toBe(false);
+    expect(result.addons).toEqual(addons);
+  });
+
+  test('leaves a local addon entry untouched', () => {
+    const addons = ['local@/home/user/my-addon'];
+
+    const result = migrateUpstreamSteamripAddon(addons);
+
+    expect(result.replaced).toBe(false);
+    expect(result.addons).toEqual(addons);
+  });
+
+  test('does not duplicate the fork entry if both the upstream marketplace form and the fork are already present', () => {
+    const result = migrateUpstreamSteamripAddon([
+      `git@${STEAMRIP_ADDON_FORK_URL}`,
+      'https://ogi-marketplace.nat3z.com@https://gitlab.com/fat-addons/steamrip-addon',
+    ]);
+
+    expect(result.replaced).toBe(true);
+    expect(result.addons).toEqual([`git@${STEAMRIP_ADDON_FORK_URL}`]);
+  });
+
+  test('still replaces a stored bare entry after the 4.1.0 migration normalizes it to marketplace form', () => {
+    const storedBareEntry = 'https://gitlab.com/fat-addons/steamrip-addon';
+    const afterAddonSourceMigration = normalizeAddonLink(storedBareEntry);
+
+    const result = migrateUpstreamSteamripAddon([afterAddonSourceMigration]);
+
+    expect(result.replaced).toBe(true);
+    expect(result.addons).toEqual([`git@${STEAMRIP_ADDON_FORK_URL}`]);
+  });
+});
+
+describe('needsSteamripForkRepair', () => {
+  test('is true when the fork link is present with no install log', () => {
+    expect(
+      needsSteamripForkRepair([`git@${STEAMRIP_ADDON_FORK_URL}`], false)
+    ).toBe(true);
+  });
+
+  test('is false when the install log is present', () => {
+    expect(
+      needsSteamripForkRepair([`git@${STEAMRIP_ADDON_FORK_URL}`], true)
+    ).toBe(false);
+  });
+
+  test('is false when only the upstream marketplace-form entry is present', () => {
+    expect(
+      needsSteamripForkRepair(
+        [
+          'https://ogi-marketplace.nat3z.com@https://gitlab.com/fat-addons/steamrip-addon',
+        ],
+        false
+      )
+    ).toBe(false);
+  });
+
+  test('is false for an empty addons list', () => {
+    expect(needsSteamripForkRepair([], false)).toBe(false);
   });
 });
