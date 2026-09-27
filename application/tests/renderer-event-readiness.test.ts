@@ -31,3 +31,47 @@ test('renderer readiness resets for a new document', () => {
 
   expect(readiness.isReady()).toBe(false);
 });
+
+test('whenReady runs immediately when already ready', () => {
+  const readiness = new RendererEventReadiness();
+  readiness.markReady();
+
+  let calls = 0;
+  readiness.whenReady(() => calls++);
+
+  expect(calls).toBe(1);
+});
+
+test('whenReady fires once markReady is called', () => {
+  const readiness = new RendererEventReadiness();
+  let calls = 0;
+  readiness.whenReady(() => calls++);
+
+  expect(calls).toBe(0);
+  readiness.markReady();
+  expect(calls).toBe(1);
+});
+
+test('whenReady fires exactly once even if markReady is called again', () => {
+  const readiness = new RendererEventReadiness();
+  let calls = 0;
+  readiness.whenReady(() => calls++);
+
+  readiness.markReady();
+  readiness.reset();
+  readiness.markReady();
+
+  expect(calls).toBe(1);
+});
+
+test('reset does not drop a queued whenReady callback', () => {
+  const readiness = new RendererEventReadiness();
+  let calls = 0;
+  readiness.whenReady(() => calls++);
+
+  readiness.reset();
+  expect(calls).toBe(0);
+
+  readiness.markReady();
+  expect(calls).toBe(1);
+});

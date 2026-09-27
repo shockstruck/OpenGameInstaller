@@ -250,12 +250,22 @@ export async function sendIPCMessage(channel: string, ...args: any[]) {
 
   if (!rendererEventReadiness.isReady()) {
     logger.sync.info('waiting for events');
-    await rendererEventReadiness.wait(IPC_READY_TIMEOUT_MS, () =>
+    let timedOut = false;
+    await rendererEventReadiness.wait(IPC_READY_TIMEOUT_MS, () => {
+      timedOut = true;
       logger.sync.warn(
-        '[sendIPCMessage] client-ready-for-events not received within timeout, proceeding'
-      )
-    );
-    if (rendererEventReadiness.isReady()) logger.sync.info('events ready');
+        `[sendIPCMessage] renderer not ready; deferring ${channel} until client-ready-for-events`
+      );
+    });
+    if (timedOut) {
+      rendererEventReadiness.whenReady(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(channel, ...args);
+        }
+      });
+      return;
+    }
+    logger.sync.info('events ready');
   }
   mainWindow?.webContents.send(channel, ...args);
 }
