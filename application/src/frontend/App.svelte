@@ -10,6 +10,7 @@ import { onMount } from 'svelte';
 import { quintOut } from 'svelte/easing';
 import { derived } from 'svelte/store';
 import { fade, fly, slide } from 'svelte/transition';
+import { STEAM_INTEGRATION_FORK_URL } from '@/electron/lib/addon-links';
 import GameImage from '@/frontend/components/GameImage.svelte';
 import GameLaunchOverlay from '@/frontend/components/GameLaunchOverlay.svelte';
 import ConfigurationModal from '@/frontend/components/modal/ConfigurationModal.svelte';
@@ -550,7 +551,7 @@ document.addEventListener('migration:event:steamgriddb-launch', () => {
 document.addEventListener('migration:event:install-steam-addon', async () => {
   // go install steam-integration addon
   await runFrontendEffect(
-    electronRpc.installAddons(['https://github.com/Nat3z/steam-integration'])
+    electronRpc.installAddons([`git@${STEAM_INTEGRATION_FORK_URL}`])
   );
 });
 </script>

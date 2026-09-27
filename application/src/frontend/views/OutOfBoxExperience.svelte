@@ -5,6 +5,7 @@ import { Effect, Either, Schema } from 'effect';
 import { onDestroy, onMount } from 'svelte';
 import { preventDefault } from 'svelte/legacy';
 import { fade } from 'svelte/transition';
+import { STEAM_INTEGRATION_FORK_URL } from '@/electron/lib/addon-links';
 import { communityAddonArraySchema } from '@/electron/lib/marketplace-schema';
 import ThemePicker from '@/frontend/components/ThemePicker.svelte';
 import { runFrontendEffect } from '@/frontend/lib/core/runtime';
@@ -34,9 +35,7 @@ let addons = '';
 let addonSearch = $state('');
 let oobeMarketplaceSources = $state<string[]>([...DEFAULT_MARKETPLACE_SOURCES]);
 let marketplaceSourceUrl = $state('');
-let selectedAddons = $state<string[]>([
-  `${DEFAULT_MARKETPLACE_SOURCES[0]}@https://github.com/Nat3z/steam-integration`,
-]);
+let selectedAddons = $state<string[]>([`git@${STEAM_INTEGRATION_FORK_URL}`]);
 let selectedTheme = $state('light');
 let isSettingKey = $state(false);
 let logContainer: HTMLDivElement | null = $state(null);
