@@ -4,6 +4,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { Deferred, Effect, Fiber } from 'effect';
 import {
+  listSteamCompatibilityTools,
+  resolveSteamCompatibilityTool,
   type SteamLocation,
   SteamRepository,
   SteamRepositoryLive,
@@ -224,5 +226,111 @@ describe('Steam shortcuts repository', () => {
     );
 
     expect(fs.readFileSync(location.user.shortcutsPath)).toEqual(original);
+  });
+});
+
+describe('listSteamCompatibilityTools', () => {
+  const makeTempDir = (): string => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'ogi-compat-tools-')
+    );
+    temporaryDirectories.push(directory);
+    return directory;
+  };
+
+  const writeManifest = (
+    dir: string,
+    id: string,
+    displayName: string,
+    installPath = '.'
+  ): void => {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'compatibilitytool.vdf'),
+      [
+        '"compatibilitytools"',
+        '{',
+        '\t"compat_tools"',
+        '\t{',
+        `\t\t"${id}"`,
+        '\t\t{',
+        `\t\t\t"install_path" "${installPath}"`,
+        `\t\t\t"display_name" "${displayName}"`,
+        '\t\t}',
+        '\t}',
+        '}',
+      ].join('\n')
+    );
+  };
+
+  test('lists a root-level manifest named by PROTONPATH', () => {
+    const protonPath = makeTempDir();
+    writeManifest(protonPath, 'proton-cachyos', 'Proton-CachyOS');
+
+    const tools = listSteamCompatibilityTools([], [protonPath]);
+
+    expect(tools).toEqual([
+      {
+        id: 'proton-cachyos',
+        name: 'Proton-CachyOS',
+        installPath: protonPath,
+      },
+    ]);
+  });
+
+  test('lists a tool from a STEAM_EXTRA_COMPAT_TOOLS_PATHS entry', () => {
+    const extraRoot = makeTempDir();
+    const toolDir = path.join(extraRoot, 'GE-Proton-extra');
+    writeManifest(toolDir, 'ge-proton-extra', 'GE-Proton-Extra');
+
+    const tools = listSteamCompatibilityTools([], [extraRoot]);
+
+    expect(tools).toEqual([
+      {
+        id: 'ge-proton-extra',
+        name: 'GE-Proton-Extra',
+        installPath: toolDir,
+      },
+    ]);
+  });
+
+  test('follows a symlinked compatibilitytools.d entry and skips a broken link', () => {
+    const steamRoot = makeTempDir();
+    const customDir = path.join(steamRoot, 'compatibilitytools.d');
+    fs.mkdirSync(customDir, { recursive: true });
+
+    const realToolDir = makeTempDir();
+    writeManifest(realToolDir, 'linked-tool', 'Linked Tool');
+    fs.symlinkSync(realToolDir, path.join(customDir, 'linked-tool'), 'dir');
+
+    const missingTarget = path.join(makeTempDir(), 'does-not-exist');
+    fs.symlinkSync(missingTarget, path.join(customDir, 'broken-link'), 'dir');
+
+    const tools = listSteamCompatibilityTools([steamRoot], []);
+
+    expect(tools).toEqual([
+      {
+        id: 'linked-tool',
+        name: 'Linked Tool',
+        installPath: path.join(customDir, 'linked-tool'),
+      },
+    ]);
+  });
+
+  test('auto resolves the Nix store Proton-CachyOS over a home-directory copy', () => {
+    const storeDir = makeTempDir();
+    writeManifest(storeDir, 'proton-cachyos', 'Proton-CachyOS');
+
+    const homeRoot = makeTempDir();
+    const homeToolName = 'proton-cachyos-11.0-20260703-slr-x86_64_v3';
+    writeManifest(
+      path.join(homeRoot, 'compatibilitytools.d', homeToolName),
+      homeToolName,
+      homeToolName
+    );
+
+    const tools = listSteamCompatibilityTools([homeRoot], [storeDir]);
+
+    expect(resolveSteamCompatibilityTool('auto', tools)).toBe('proton-cachyos');
   });
 });

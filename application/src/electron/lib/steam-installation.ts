@@ -192,25 +192,116 @@ export function resolveSteamCompatibilityTool(
 }
 
 const listDirectories = (parent: string): string[] => {
+  let entries: fs.Dirent[];
   try {
-    return fs
-      .readdirSync(parent, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
+    entries = fs.readdirSync(parent, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => {
+      if (entry.isDirectory()) return true;
+      if (!entry.isSymbolicLink()) return false;
+      try {
+        return fs.statSync(path.join(parent, entry.name)).isDirectory();
+      } catch {
+        // Broken symlink: skip it rather than failing the listing.
+        return false;
+      }
+    })
+    .map((entry) => entry.name);
+};
+
+/**
+ * Parse a compatibilitytool.vdf manifest into its declared tools.
+ * `install_path` in the manifest is relative to `installBase` (the
+ * manifest's own directory). Missing or unparseable manifests yield no
+ * tools rather than failing the listing.
+ */
+const readCompatToolManifest = (
+  manifestPath: string,
+  installBase: string
+): SteamCompatibilityTool[] => {
+  try {
+    const manifest = parseTextVdf(fs.readFileSync(manifestPath, 'utf8'));
+    const definitions = manifest.get('compatibilitytools');
+    const compatTools =
+      definitions instanceof Map ? definitions.get('compat_tools') : undefined;
+    if (!(compatTools instanceof Map)) return [];
+    const results: SteamCompatibilityTool[] = [];
+    for (const [id, definition] of compatTools as TextVdfObject) {
+      const displayName =
+        definition instanceof Map ? definition.get('display_name') : undefined;
+      const installPath =
+        definition instanceof Map ? definition.get('install_path') : undefined;
+      results.push({
+        id,
+        name: typeof displayName === 'string' ? displayName : id,
+        installPath: path.resolve(
+          installBase,
+          typeof installPath === 'string' ? installPath : '.'
+        ),
+      });
+    }
+    return results;
   } catch {
     return [];
   }
 };
 
 /**
+ * Tool directories named by the environment: `PROTONPATH` (a single tool
+ * directory, as umu sets it) and `STEAM_EXTRA_COMPAT_TOOLS_PATHS` (colon
+ * separated, as nixpkgs' `programs.steam` sets it via
+ * `makeSearchPathOutput "steamcompattool" ""`).
+ */
+export function getEnvCompatToolPaths(
+  env: NodeJS.ProcessEnv = process.env
+): string[] {
+  const extraPaths =
+    env.STEAM_EXTRA_COMPAT_TOOLS_PATHS?.split(':').filter(Boolean) ?? [];
+  return [env.PROTONPATH, ...extraPaths].filter(
+    (candidate): candidate is string => Boolean(candidate)
+  );
+}
+
+/**
+ * Scan one environment-named tool directory. A directory with
+ * compatibilitytool.vdf at its root (the nixpkgs steamcompattool layout) is
+ * a single tool; any other directory is scanned like a
+ * compatibilitytools.d, one manifest per child directory.
+ */
+const scanEnvCompatToolPath = (entry: string): SteamCompatibilityTool[] => {
+  const rootManifest = path.join(entry, 'compatibilitytool.vdf');
+  if (fs.existsSync(rootManifest)) {
+    return readCompatToolManifest(rootManifest, entry);
+  }
+  return listDirectories(entry).flatMap((directory) => {
+    const toolDir = path.join(entry, directory);
+    return readCompatToolManifest(
+      path.join(toolDir, 'compatibilitytool.vdf'),
+      toolDir
+    );
+  });
+};
+
+/**
  * List the compat tools installed across all Steam roots by reading the
  * filesystem: official Proton builds under steamapps/common and custom tools
- * (GE-Proton etc.) registered through compatibilitytools.d manifests.
+ * (GE-Proton etc.) registered through compatibilitytools.d manifests. Tool
+ * directories named by `PROTONPATH` / `STEAM_EXTRA_COMPAT_TOOLS_PATHS` are
+ * scanned first, so they win ties with a Steam-root tool of the same id.
  */
 export function listSteamCompatibilityTools(
-  candidates = getSteamRootCandidates()
+  candidates = getSteamRootCandidates(),
+  envPaths = getEnvCompatToolPaths()
 ): SteamCompatibilityTool[] {
   const tools = new Map<string, SteamCompatibilityTool>();
+  for (const entry of envPaths) {
+    for (const tool of scanEnvCompatToolPath(entry)) {
+      if (!tools.has(tool.id)) tools.set(tool.id, tool);
+    }
+  }
   for (const root of candidates) {
     const commonDir = path.join(root, 'steamapps', 'common');
     for (const directory of listDirectories(commonDir)) {
@@ -224,42 +315,12 @@ export function listSteamCompatibilityTools(
     }
     const customDir = path.join(root, 'compatibilitytools.d');
     for (const directory of listDirectories(customDir)) {
-      const manifestPath = path.join(
-        customDir,
-        directory,
-        'compatibilitytool.vdf'
-      );
-      try {
-        const manifest = parseTextVdf(fs.readFileSync(manifestPath, 'utf8'));
-        const definitions = manifest.get('compatibilitytools');
-        const compatTools =
-          definitions instanceof Map
-            ? definitions.get('compat_tools')
-            : undefined;
-        if (!(compatTools instanceof Map)) continue;
-        for (const [id, definition] of compatTools as TextVdfObject) {
-          if (tools.has(id)) continue;
-          const displayName =
-            definition instanceof Map
-              ? definition.get('display_name')
-              : undefined;
-          const installPath =
-            definition instanceof Map
-              ? definition.get('install_path')
-              : undefined;
-          tools.set(id, {
-            id,
-            name: typeof displayName === 'string' ? displayName : id,
-            // install_path in the manifest is relative to the manifest's directory.
-            installPath: path.resolve(
-              customDir,
-              directory,
-              typeof installPath === 'string' ? installPath : '.'
-            ),
-          });
-        }
-      } catch {
-        // Skip missing or unparseable manifests rather than failing the listing.
+      const toolDir = path.join(customDir, directory);
+      for (const tool of readCompatToolManifest(
+        path.join(toolDir, 'compatibilitytool.vdf'),
+        toolDir
+      )) {
+        if (!tools.has(tool.id)) tools.set(tool.id, tool);
       }
     }
   }
