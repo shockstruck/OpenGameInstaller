@@ -64,9 +64,11 @@ describe('stop seeding', () => {
 
   test('a card can stop seeding only when torrent setup is over', () => {
     const seeding = { status: 'seeding', downloadType: 'torrent' };
-    expect(canStopSeeding(seeding)).toBe(true);
+    expect(canStopSeeding(seeding)).toBe(false);
     expect(canStopSeeding(seeding, { isActive: false })).toBe(true);
-    expect(canStopSeeding({ ...seeding, downloadType: 'magnet' })).toBe(true);
+    expect(
+      canStopSeeding({ ...seeding, downloadType: 'magnet' }, { isActive: false })
+    ).toBe(true);
     expect(canStopSeeding(seeding, { isActive: true })).toBe(false);
     expect(canStopSeeding({ ...seeding, status: 'setup-complete' })).toBe(
       false
