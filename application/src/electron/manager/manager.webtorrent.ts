@@ -114,12 +114,20 @@ export function torrent(torrentId: string | Buffer, path: string) {
           );
         }
       }),
+    // Stays pending while the torrent seeds; interrupting it destroys the
+    // torrent without destroying its store, so the files on disk are kept.
     seed: (): Effect.Effect<void, TorrentError> =>
       Effect.async<void, TorrentError>((resumeEffect) => {
         try {
-          client.seed(path, () => {
-            logger.sync.info('Seeding torrent finished');
-            resumeEffect(Effect.void);
+          const seeding = client.seed(path, () => {
+            logger.sync.info('Seeding torrent started');
+          });
+          return Effect.sync(() => {
+            try {
+              seeding.destroy({ destroyStore: false });
+            } catch (cause) {
+              logger.sync.error('Failed to stop seeding torrent:', cause);
+            }
           });
         } catch (cause) {
           resumeEffect(

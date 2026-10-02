@@ -9,6 +9,7 @@ import { createLogger, LOGGER_PREFIXES } from '@ogi-sdk/logger';
 import axios from 'axios';
 import { Deferred, Effect, Fiber } from 'effect';
 import { BrowserWindow } from 'electron';
+import { stopSeeding } from '@/electron/lib/stop-seeding.js';
 import { getTorrentInfoHash } from '@/electron/lib/torrent-hash.js';
 import { sendNotification } from '@/electron/main.js';
 import {
@@ -117,6 +118,7 @@ class TorrentDownload {
   private qbitTorrentHash?: string;
   private expectedInfoHash?: string;
   private qbitNotFoundTicks = 0;
+  private seedingStopped = false;
 
   private static readonly QBIT_LOOKUP_TIMEOUT_TICKS = 60;
 
@@ -318,7 +320,7 @@ class TorrentDownload {
         })
       );
 
-      if (shouldSeed && this.wtInstance) {
+      if (shouldSeed && this.wtInstance && !this.seedingStopped) {
         this.seedingFiber = yield* Effect.forkDaemon(
           this.wtInstance.seed().pipe(
             Effect.catchAll((error) =>
@@ -514,6 +516,14 @@ class TorrentDownload {
       return Effect.void;
     }
 
+    return this.removeQbitTorrent(true);
+  }
+
+  private removeQbitTorrent(
+    deleteFiles: boolean
+  ): Effect.Effect<void, TorrentError> {
+    if (!this.qbitClient) return Effect.void;
+
     return Effect.gen(this, function* () {
       let hash = this.qbitTorrentHash;
       if (!hash) {
@@ -523,7 +533,7 @@ class TorrentDownload {
       if (!hash) return;
 
       yield* Effect.tryPromise({
-        try: () => this.qbitClient!.removeTorrent(hash, true),
+        try: () => this.qbitClient!.removeTorrent(hash, deleteFiles),
         catch: (cause) =>
           torrentError(
             `Failed to remove qBittorrent torrent: ${getQbitErrorMessage(cause)}`,
@@ -647,6 +657,25 @@ class TorrentDownload {
       this.progressFiber = undefined;
 
       setImmediate(() => clearDownloadHandshake(this.id));
+      downloads.delete(this.id);
+    });
+  }
+
+  public stopSeeding(): Effect.Effect<void, TorrentError> {
+    if (this.status !== 'seeding') return Effect.void;
+
+    return Effect.gen(this, function* () {
+      this.seedingStopped = true;
+      yield* stopSeeding({
+        clientType: this.torrentClientType,
+        seedingFiber: this.seedingFiber,
+        removeQbitTorrent: (deleteFiles) => this.removeQbitTorrent(deleteFiles),
+      });
+      this.seedingFiber = undefined;
+      if (this.progressFiber) yield* Fiber.interrupt(this.progressFiber);
+      this.progressFiber = undefined;
+      this.setStatus('completed');
+      logger.sync.info('[torrent] Stopped seeding', this.id);
       downloads.delete(this.id);
     });
   }
@@ -807,6 +836,9 @@ export default function handler(mainWindow: BrowserWindow) {
     ),
     procedure(ElectronRpc.torrent.abortDownload, (id: string) =>
       run(downloads.get(id)?.cancel() ?? Effect.void)
+    ),
+    procedure(ElectronRpc.torrent.stopSeeding, (id: string) =>
+      run(downloads.get(id)?.stopSeeding() ?? Effect.void)
     ),
     procedure(ElectronRpc.downloadTorrentInto, (link: string) =>
       run(
