@@ -138,6 +138,7 @@ export function torrent(torrentId: string | Buffer, path: string) {
               })
             )
           );
+          return Effect.void;
         }
       }),
   };
