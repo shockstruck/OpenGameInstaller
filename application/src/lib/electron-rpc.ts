@@ -492,6 +492,7 @@ export const ElectronRpc = {
     pauseDownload: rpc('torrent.pauseDownload', [Schema.String], Void),
     resumeDownload: rpc('torrent.resumeDownload', [Schema.String], Void),
     abortDownload: rpc('torrent.abortDownload', [Schema.String], Void),
+    stopSeeding: rpc('torrent.stopSeeding', [Schema.String], Void),
   },
   oobe: {
     downloadTools: rpc(

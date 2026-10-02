@@ -8,6 +8,8 @@ import RedistributablesProgress from '@/frontend/components/RedistributablesProg
 import SetupPrompt from '@/frontend/components/SetupPrompt.svelte';
 import { runDetached, runFrontendEffect } from '@/frontend/lib/core/runtime';
 import { updateDownloadStatus } from '@/frontend/lib/downloads/lifecycle';
+import { canStopSeeding } from '@/frontend/lib/downloads/seedingEligibility';
+import { stopSeedingDownload } from '@/frontend/lib/downloads/stopSeeding';
 import { electronRpc } from '@/frontend/lib/electron-rpc';
 import {
   findRetryableSetup,
@@ -822,6 +824,18 @@ onDestroy(() => {
                     handleRetryRedistributables(download.id, download.appID)}
                 >
                   Retry Redistributables
+                </button>
+              {/if}
+              {#if canStopSeeding(download, $setupLogs[download.id])}
+                <button
+                  class="btn btn-secondary btn-sm"
+                  onclick={() =>
+                    void runDownloadAction(
+                      stopSeedingDownload(download.id),
+                      'Failed to stop seeding'
+                    )}
+                >
+                  Stop seeding
                 </button>
               {/if}
               {#if findRetryableSetup(download, $failedSetups)}
