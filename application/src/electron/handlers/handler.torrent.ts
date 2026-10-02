@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { QBittorrent } from '@ctrl/qbittorrent';
 import {
   formatError,
@@ -31,6 +32,7 @@ import {
   waitForDownloadHandshake,
 } from '@/lib/download-handshake.js';
 import { ElectronRpc } from '@/lib/electron-rpc.js';
+import { torrentStagingPath } from '@/lib/torrent-staging.js';
 
 const logger = createLogger(LOGGER_PREFIXES.electron);
 
@@ -275,7 +277,10 @@ class TorrentDownload {
             this.job.type === 'torrent'
               ? yield* this.downloadTorrentFile(this.job.link)
               : this.job.link;
-          this.wtInstance = wtConnect(torrentId, this.job.path + '.torrent');
+          this.wtInstance = wtConnect(
+            torrentId,
+            torrentStagingPath(this.job.path, existsSync)
+          );
 
           const completed = yield* Deferred.make<void>();
           this.wtBlock = yield* Effect.acquireRelease(

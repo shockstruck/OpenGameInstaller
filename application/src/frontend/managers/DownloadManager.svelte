@@ -34,6 +34,7 @@ import {
   getDownloadItem,
   updateDownloadStatus,
 } from '@/frontend/utils';
+import { filesToStage, torrentStagingNames } from '@/lib/torrent-staging';
 
 const logger = createLogger(LOGGER_PREFIXES.frontend);
 
@@ -149,11 +150,14 @@ async function processDownloadComplete(
   const filesNotToMove = [
     ...(downloadedItem.files ?? []).map((file) => file.name),
     basename(downloadedItem.downloadPath),
-    ...(isTorrent ? [basename(downloadedItem.downloadPath) + '.torrent'] : []),
+    ...(isTorrent ? torrentStagingNames(downloadedItem.downloadPath) : []),
     'old_files',
   ];
-  const filesToMove = currentFiles.filter(
-    (file) => !filesNotToMove.includes(file)
+  const filesToMove = filesToStage(
+    currentFiles,
+    downloadedItem.downloadPath,
+    (downloadedItem.files ?? []).map((file) => file.name),
+    isTorrent
   );
   logger.sync.info('Current files: ', currentFiles);
   logger.sync.info('downloadedItem.files: ', downloadedItem.files);
