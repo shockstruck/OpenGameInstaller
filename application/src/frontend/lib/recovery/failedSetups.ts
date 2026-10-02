@@ -285,6 +285,16 @@ export function retryFailedSetup(failedSetup: FailedSetup) {
         )
       : runSetupApp(downloadItem, setupData.path, isTorrent, additionalData);
 
+    // The temp card above is now the settled one; drop the errored original.
+    currentDownloads.update((downloads) =>
+      downloads.filter(
+        (download) =>
+          !(
+            download.id === failedSetup.downloadInfo.id &&
+            download.status === 'error'
+          )
+      )
+    );
     removeFailedSetup(failedSetup.id);
     createNotification({
       id: Math.random().toString(36).substring(7),
@@ -295,8 +305,17 @@ export function retryFailedSetup(failedSetup: FailedSetup) {
     Effect.tapError((error) =>
       Effect.sync(() => {
         logger.sync.error('Error retrying setup:', error);
+        // The failed attempt saved its own record under the temp id.
+        removeFailedSetup(tempId);
         currentDownloads.update((downloads) =>
-          downloads.filter((download) => download.id !== tempId)
+          downloads
+            .filter((download) => download.id !== tempId)
+            .map((download) =>
+              download.id === failedSetup.downloadInfo.id &&
+              download.status === 'error'
+                ? { ...download, error: formatError(error) }
+                : download
+            )
         );
         createNotification({
           id: Math.random().toString(36).substring(7),

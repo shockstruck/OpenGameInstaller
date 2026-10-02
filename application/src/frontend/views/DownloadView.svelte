@@ -9,6 +9,10 @@ import SetupPrompt from '@/frontend/components/SetupPrompt.svelte';
 import { runDetached, runFrontendEffect } from '@/frontend/lib/core/runtime';
 import { updateDownloadStatus } from '@/frontend/lib/downloads/lifecycle';
 import { electronRpc } from '@/frontend/lib/electron-rpc';
+import {
+  findRetryableSetup,
+  retryDownloadSetup,
+} from '@/frontend/lib/recovery/retryEligibility';
 import { startRedistributableInstallation } from '@/frontend/lib/setup/setup';
 import {
   createNotification,
@@ -211,6 +215,20 @@ async function handleRetry(failedSetup: FailedSetup) {
     retryFailedSetup(failedSetup),
     'Failed to retry setup'
   );
+}
+
+let retryingDownloads = $state<string[]>([]);
+
+async function handleRetryDownload(download: { id: string; status: string }) {
+  if (retryingDownloads.includes(download.id)) return;
+  const retry = retryDownloadSetup(download, $failedSetups, handleRetry);
+  if (!retry) return;
+  retryingDownloads = [...retryingDownloads, download.id];
+  try {
+    await retry;
+  } finally {
+    retryingDownloads = retryingDownloads.filter((id) => id !== download.id);
+  }
 }
 
 function handleRemove(setupId: string) {
@@ -804,6 +822,15 @@ onDestroy(() => {
                     handleRetryRedistributables(download.id, download.appID)}
                 >
                   Retry Redistributables
+                </button>
+              {/if}
+              {#if findRetryableSetup(download, $failedSetups)}
+                <button
+                  class="btn btn-primary btn-sm"
+                  disabled={retryingDownloads.includes(download.id)}
+                  onclick={() => handleRetryDownload(download)}
+                >
+                  Retry
                 </button>
               {/if}
               {#if download.status === 'setup-complete'}
