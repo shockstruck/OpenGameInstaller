@@ -13,6 +13,7 @@ import {
   runSyncBoundary,
 } from '@/electron/runtime.js';
 import { ElectronRpc } from '@/lib/electron-rpc.js';
+import { withHiddenFiles } from './dialog-options.js';
 
 const resolvePath = (value: string): string =>
   value.startsWith('./') ? join(__dirname, value) : value;
@@ -167,7 +168,7 @@ export default function handler() {
       (options: Electron.OpenDialogOptions) =>
         runBoundary(
           Effect.tryPromise({
-            try: () => dialog.showOpenDialog(options),
+            try: () => dialog.showOpenDialog(withHiddenFiles(options)),
             catch: (cause) =>
               new FileSystemError({ message: formatError(cause), cause }),
           }).pipe(Effect.map((result) => result.filePaths[0]))
