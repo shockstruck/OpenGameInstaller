@@ -9,9 +9,14 @@ import { join } from 'path';
 import semver from 'semver';
 import { addToDesktop } from '@/electron/handlers/helpers.app/desktop-shortcut.js';
 import {
+  appendDodiAddon,
+  DODI_ADDON_MIGRATION_FROM,
+  DODI_ADDON_MIGRATION_TO,
+  DODI_ADDON_URL,
   migrateNat3zSteamIntegrationAddon,
   migrateUpstreamFatboyUnpackAddon,
   migrateUpstreamSteamripAddon,
+  needsDodiAddonRepair,
   needsFatboyUnpackForkRepair,
   needsSteamIntegrationForkRepair,
   needsSteamripForkRepair,
@@ -713,6 +718,72 @@ let migrations: {
         '[migration] fatboy-unpack fork is configured but missing on disk; repairing install'
       );
       await sendIPCMessage('migration:event', 'install-fatboy-unpack-addon');
+    },
+  },
+  // Runs in key order. The repair is listed before the append on purpose: it
+  // only sees an entry that was already configured, so the append below (which
+  // fires its own install) is never followed by a second install event.
+  'repair-dodi-addon-install': {
+    from: DODI_ADDON_MIGRATION_FROM,
+    to: DODI_ADDON_MIGRATION_TO,
+    description:
+      'Repairs installs where the DODI Repacks addon is configured in general.json but never cloned to disk.',
+    platform: 'all',
+    run: async () => {
+      const configPath = join(__dirname, 'config/option/general.json');
+      if (!fsSync.existsSync(configPath)) return;
+
+      const generalConfigObj = JSON.parse(
+        await fs.readFile(configPath, 'utf-8')
+      ) as { addons?: unknown };
+      const addons = Array.isArray(generalConfigObj.addons)
+        ? generalConfigObj.addons.filter(
+            (addon): addon is string => typeof addon === 'string'
+          )
+        : [];
+
+      const installLogExists = fsSync.existsSync(
+        join(__dirname, 'addons', 'dodi-addon', 'installation.log')
+      );
+      if (!needsDodiAddonRepair(addons, installLogExists)) {
+        logger.sync.info('[migration] dodi-addon install does not need repair');
+        return;
+      }
+
+      logger.sync.info(
+        '[migration] dodi-addon is configured but missing on disk; repairing install'
+      );
+      await sendIPCMessage('migration:event', 'install-dodi-addon');
+    },
+  },
+  'add-dodi-addon': {
+    from: DODI_ADDON_MIGRATION_FROM,
+    to: DODI_ADDON_MIGRATION_TO,
+    description: 'Adds the DODI Repacks addon to the addons list.',
+    platform: 'all',
+    run: async () => {
+      const configPath = join(__dirname, 'config/option/general.json');
+      if (!fsSync.existsSync(configPath)) return;
+
+      const generalConfigObj = JSON.parse(
+        await fs.readFile(configPath, 'utf-8')
+      ) as { addons?: unknown };
+      if (!Array.isArray(generalConfigObj.addons)) return;
+
+      // Keep every entry exactly as stored, including non-string ones.
+      const current = generalConfigObj.addons;
+      const { appended } = appendDodiAddon(
+        current.filter((addon): addon is string => typeof addon === 'string')
+      );
+      if (!appended) {
+        logger.sync.info('[migration] dodi-addon is already configured');
+        return;
+      }
+
+      generalConfigObj.addons = [...current, `git@${DODI_ADDON_URL}`];
+      await fs.writeFile(configPath, JSON.stringify(generalConfigObj));
+      await sendIPCMessage('migration:event', 'install-dodi-addon');
+      logger.sync.info('[migration] added the dodi-addon entry');
     },
   },
 };

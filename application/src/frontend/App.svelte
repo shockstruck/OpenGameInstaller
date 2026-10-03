@@ -11,6 +11,7 @@ import { quintOut } from 'svelte/easing';
 import { derived } from 'svelte/store';
 import { fade, fly, slide } from 'svelte/transition';
 import {
+  DODI_ADDON_URL,
   FATBOY_UNPACK_FORK_URL,
   STEAM_INTEGRATION_FORK_URL,
   STEAMRIP_ADDON_FORK_URL,
@@ -576,6 +577,10 @@ document.addEventListener(
     );
   }
 );
+document.addEventListener('migration:event:install-dodi-addon', async () => {
+  // go install dodi-addon
+  await runFrontendEffect(electronRpc.installAddons([`git@${DODI_ADDON_URL}`]));
+});
 </script>
 
 <RootPasswordGranter />

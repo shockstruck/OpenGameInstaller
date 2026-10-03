@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test';
+import semver from 'semver';
 import {
+  appendDodiAddon,
+  DODI_ADDON_MIGRATION_FROM,
+  DODI_ADDON_MIGRATION_TO,
+  DODI_ADDON_URL,
   FATBOY_UNPACK_FORK_URL,
   migrateNat3zSteamIntegrationAddon,
   migrateUpstreamFatboyUnpackAddon,
   migrateUpstreamSteamripAddon,
+  needsDodiAddonRepair,
   needsFatboyUnpackForkRepair,
   needsSteamIntegrationForkRepair,
   needsSteamripForkRepair,
@@ -669,5 +675,72 @@ describe('SteamRip and Fatboy unpack redirects do not affect each other', () => 
       `git@${STEAMRIP_ADDON_FORK_URL}`,
       `git@${FATBOY_UNPACK_FORK_URL}`,
     ]);
+  });
+});
+
+describe('DODI addon', () => {
+  const dodiLink = `git@${DODI_ADDON_URL}`;
+
+  test('appends the addon when absent', () => {
+    expect(appendDodiAddon([])).toEqual({ addons: [dodiLink], appended: true });
+  });
+
+  test('does not duplicate across URL variants', () => {
+    const variants = [
+      DODI_ADDON_URL,
+      `${DODI_ADDON_URL}.git`,
+      `${DODI_ADDON_URL}/`,
+      'https://GitHub.com/ShockStruck/DODI-Addon',
+      `git@${DODI_ADDON_URL}.git`,
+      `https://ogi-marketplace.nat3z.com@${DODI_ADDON_URL}`,
+    ];
+    for (const variant of variants) {
+      const result = appendDodiAddon([variant]);
+      expect(result).toEqual({ addons: [variant], appended: false });
+    }
+  });
+
+  test('keeps every other entry, in order', () => {
+    const others = [
+      'git@https://github.com/shockstruck/steamrip-addon',
+      'local:/home/user/my-addon',
+      'git@https://github.com/shockstruck/fatboy-unpack',
+    ];
+    expect(appendDodiAddon(others).addons).toEqual([...others, dodiLink]);
+  });
+
+  test('a lookalike repository is not treated as DODI', () => {
+    const other = 'git@https://github.com/shockstruck/dodi-addon-extra';
+    expect(appendDodiAddon([other]).appended).toBe(true);
+  });
+
+  test('repair is needed only when configured and not cloned', () => {
+    expect(needsDodiAddonRepair([dodiLink], false)).toBe(true);
+    expect(needsDodiAddonRepair([`${DODI_ADDON_URL}.git`], false)).toBe(true);
+    expect(needsDodiAddonRepair([dodiLink], true)).toBe(false);
+    expect(needsDodiAddonRepair([], false)).toBe(false);
+    expect(
+      needsDodiAddonRepair(['git@https://github.com/shockstruck/fatboy-unpack'], false)
+    ).toBe(false);
+    expect(needsDodiAddonRepair(['local:/some/dodi-addon'], false)).toBe(false);
+  });
+
+  // The runner in migrations.ts applies a migration when
+  // gte(lastVersion, from) && lt(lastVersion, to), then writes the running
+  // VERSION to lastVersion.txt.
+  const applies = (lastVersion: string) =>
+    semver.gte(lastVersion, DODI_ADDON_MIGRATION_FROM) &&
+    semver.lt(lastVersion, DODI_ADDON_MIGRATION_TO);
+
+  test('the migrations run when upgrading from ss.16 and earlier', () => {
+    expect(applies('4.3.1-ss.16')).toBe(true);
+    expect(applies('4.3.1-ss.14')).toBe(true);
+    expect(applies('0.0.0')).toBe(true);
+  });
+
+  test('the migrations do not run again once ss.17 has been recorded', () => {
+    expect(applies('4.3.1-ss.17')).toBe(false);
+    expect(applies('4.3.1-ss.18')).toBe(false);
+    expect(applies('4.3.2')).toBe(false);
   });
 });

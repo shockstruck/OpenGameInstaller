@@ -25,6 +25,18 @@ export const FATBOY_UNPACK_FORK_URL =
 const UPSTREAM_FATBOY_UNPACK_URL =
   'https://gitlab.com/fat-addons/fatboy-unpack';
 
+export const DODI_ADDON_URL = 'https://github.com/shockstruck/dodi-addon';
+
+/**
+ * Version range of the DODI addon migrations. `from` is 0.0.0 so an install
+ * that skipped an intermediate release still gets it; `to` is the release that
+ * ships it, so it stops applying once `lastVersion.txt` has been written as
+ * that version (the migration runner writes the running VERSION after every
+ * run).
+ */
+export const DODI_ADDON_MIGRATION_FROM = '0.0.0';
+export const DODI_ADDON_MIGRATION_TO = '4.3.1-ss.17';
+
 const CURRENT_WEB_MARKETPLACE_SOURCE_BY_CANONICAL = new Map(
   CURRENT_WEB_MARKETPLACE_SOURCES.map((source) => [
     canonicalizeAddonSource(source),
@@ -349,6 +361,40 @@ export function needsFatboyUnpackForkRepair(
     if (parsed.kind === 'local') return false;
     return canonicalizeAddonSource(parsed.gitUrl) === forkCanonical;
   });
+}
+
+/**
+ * Appends the DODI Repacks addon to the addons list unless an entry already
+ * canonicalises to it (any link form, case, `.git` or trailing slash). Every
+ * other entry, local ones included, is kept in its original order.
+ */
+export function appendDodiAddon(addons: readonly string[]): {
+  addons: string[];
+  appended: boolean;
+} {
+  if (hasDodiAddon(addons)) return { addons: [...addons], appended: false };
+  return { addons: [...addons, `git@${DODI_ADDON_URL}`], appended: true };
+}
+
+function hasDodiAddon(addons: readonly string[]): boolean {
+  const dodiCanonical = canonicalizeAddonSource(DODI_ADDON_URL);
+  return addons.some((addon) => {
+    const parsed = parseAddonLink(addon);
+    if (parsed.kind === 'local') return false;
+    return canonicalizeAddonSource(parsed.gitUrl) === dodiCanonical;
+  });
+}
+
+/**
+ * Whether the DODI addon needs a repair install: the addons list already names
+ * it but its checkout's `installation.log` is missing.
+ */
+export function needsDodiAddonRepair(
+  addons: readonly string[],
+  installLogExists: boolean
+): boolean {
+  if (installLogExists) return false;
+  return hasDodiAddon(addons);
 }
 
 export function parseAddonLink(addonLink: string): ParsedAddonLink {
