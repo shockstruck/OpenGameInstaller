@@ -7,7 +7,7 @@ import type {
   StoreData,
 } from '@ogi-sdk/connect';
 import { createLogger, LOGGER_PREFIXES } from '@ogi-sdk/logger';
-import { Effect } from 'effect';
+import { Cause, Duration, Effect } from 'effect';
 import { DeferrableTask } from '../deffered';
 import {
   closeProtocolError,
@@ -18,6 +18,43 @@ import {
 import type { ClientMessageHandler, ClientMessageHandlers } from './types';
 
 const logger = createLogger(LOGGER_PREFIXES.addonServer);
+
+/**
+ * Upper bound on one addon's answer to a `game-details` request. Slow
+ * providers scrape a remote page (page fetch plus parsing), which finishes in
+ * seconds; 30s leaves headroom for a slow host while keeping the renderer's
+ * wait finite when a provider stalls.
+ */
+export const GAME_DETAILS_PROVIDER_TIMEOUT = Duration.seconds(30);
+
+/** Same bound and rationale as {@link GAME_DETAILS_PROVIDER_TIMEOUT}. */
+export const LIBRARY_SEARCH_PROVIDER_TIMEOUT = Duration.seconds(30);
+
+/**
+ * Calls one provider addon, bounded by `timeout`. A failure or timeout is
+ * logged with the addon id and becomes `undefined`, so the caller moves on to
+ * the next provider and still sends its response.
+ */
+const callProvider = <A>(
+  client: { addonInfo?: { id: string } },
+  event: string,
+  timeout: Duration.Duration,
+  call: () => Effect.Effect<A, unknown>
+) =>
+  Effect.suspend(call).pipe(
+    Effect.timeoutFail({
+      duration: timeout,
+      onTimeout: () =>
+        new Error(`timed out after ${Duration.toMillis(timeout)}ms`),
+    }),
+    Effect.catchAllCause((cause) =>
+      logger
+        .error(
+          `${event} provider ${client.addonInfo?.id ?? 'unknown'} failed: ${Cause.pretty(cause)}`
+        )
+        .pipe(Effect.as(undefined))
+    )
+  );
 
 const handleNotification: ClientMessageHandler = ({ server }, message) => {
   const args = message.args as AddonClientToServerEventArgs['notification'];
@@ -160,8 +197,13 @@ const handleGetAppDetails: ClientMessageHandler = (context, message) =>
     const clients = getClientsSupporting(context, storefront, 'game-details');
     let appDetails: StoreData | undefined;
     for (const client of clients) {
-      const response = yield* client.events.gameDetails({ appID, storefront });
-      if (response.args) {
+      const response = yield* callProvider(
+        client,
+        'game-details',
+        GAME_DETAILS_PROVIDER_TIMEOUT,
+        () => client.events.gameDetails({ appID, storefront })
+      );
+      if (response?.args) {
         appDetails = response.args as StoreData;
         break;
       }
@@ -181,8 +223,13 @@ const handleSearchAppName: ClientMessageHandler = (context, message) =>
     const clients = getClientsSupporting(context, storefront, 'library-search');
     const results: StoreData[] = [];
     for (const client of clients) {
-      const response = yield* client.events.librarySearch(query);
-      if (response.args) results.push(...(response.args as StoreData[]));
+      const response = yield* callProvider(
+        client,
+        'library-search',
+        LIBRARY_SEARCH_PROVIDER_TIMEOUT,
+        () => client.events.librarySearch(query)
+      );
+      if (response?.args) results.push(...(response.args as StoreData[]));
     }
     yield* context.connection.events
       .response(message.id, results)
